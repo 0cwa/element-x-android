@@ -220,7 +220,7 @@ class FakeJoinedRoom(
         generateWidgetWebViewUrlResult(widgetSettings, clientId, languageTag, theme)
     }
 
-    override fun getWidgetDriver(widgetSettings: MatrixWidgetSettings): Result<MatrixWidgetDriver> {
+    override fun getWidgetDriver(widgetSettings: MatrixWidgetSettings, allowAllCapabilities: Boolean): Result<MatrixWidgetDriver> {
         return getWidgetDriverResult(widgetSettings)
     }
 

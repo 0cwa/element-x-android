@@ -472,14 +472,18 @@ class JoinedRustRoom(
         }
     }
 
-    override fun getWidgetDriver(widgetSettings: MatrixWidgetSettings): Result<MatrixWidgetDriver> {
+    override fun getWidgetDriver(widgetSettings: MatrixWidgetSettings, allowAllCapabilities: Boolean): Result<MatrixWidgetDriver> {
         return runCatchingExceptions {
             RustWidgetDriver(
                 widgetSettings = widgetSettings,
                 room = innerRoom,
                 widgetCapabilitiesProvider = object : WidgetCapabilitiesProvider {
                     override fun acquireCapabilities(capabilities: WidgetCapabilities): WidgetCapabilities {
-                        return getElementCallRequiredPermissions(sessionId.value, baseRoom.deviceId.value)
+                        return if (allowAllCapabilities) {
+                            capabilities
+                        } else {
+                            getElementCallRequiredPermissions(sessionId.value, baseRoom.deviceId.value)
+                        }
                     }
                 },
             )

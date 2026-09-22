@@ -255,9 +255,13 @@ interface JoinedRoom : BaseRoom {
     /**
      * Get a [MatrixWidgetDriver] for the provided [widgetSettings].
      * @param widgetSettings The widget settings to use.
+     * @param allowAllCapabilities whether to grant every capability requested by the widget. This is false by default so Element Call keeps its restricted capability set.
      * @return The resulting [MatrixWidgetDriver], or a failure.
      */
-    fun getWidgetDriver(widgetSettings: MatrixWidgetSettings): Result<MatrixWidgetDriver>
+    fun getWidgetDriver(
+        widgetSettings: MatrixWidgetSettings,
+        allowAllCapabilities: Boolean = false,
+    ): Result<MatrixWidgetDriver>
 
     /**
      * Enables or disables the send queue of this room only; see [io.element.android.libraries.matrix.api.MatrixClient.setAllSendQueuesEnabled]
