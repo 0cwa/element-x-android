@@ -21,7 +21,6 @@ import androidx.core.net.toUri
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
-import io.element.android.libraries.widget.BuildConfig
 import kotlinx.coroutines.flow.MutableSharedFlow
 import timber.log.Timber
 

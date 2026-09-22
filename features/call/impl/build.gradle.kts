@@ -79,7 +79,7 @@ dependencies {
     implementation(projects.libraries.preferences.api)
     implementation(projects.libraries.push.api)
     implementation(projects.libraries.uiStrings)
-    implementation(projects.libraries.widget)
+    api(projects.libraries.widget)
     implementation(projects.services.analytics.api)
     implementation(projects.services.appnavstate.api)
     implementation(projects.services.toolbox.api)
