@@ -486,7 +486,15 @@ class JoinedRustRoom(
                         return when (capabilitiesPolicy) {
                             MatrixWidgetCapabilitiesPolicy.ElementCall ->
                                 getElementCallRequiredPermissions(sessionId.value, baseRoom.deviceId.value)
-                            MatrixWidgetCapabilitiesPolicy.UserApproved -> capabilities
+                            MatrixWidgetCapabilitiesPolicy.DenyAll -> WidgetCapabilities(
+                                read = emptyList(),
+                                send = emptyList(),
+                                requiresClient = false,
+                                updateDelayedEvent = false,
+                                sendDelayedEvent = false,
+                                downloadFiles = false,
+                                rtcTransports = false,
+                            )
                         }
                     }
                 },

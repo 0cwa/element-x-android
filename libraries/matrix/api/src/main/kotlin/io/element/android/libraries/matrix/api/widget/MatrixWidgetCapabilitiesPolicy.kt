@@ -19,9 +19,10 @@ enum class MatrixWidgetCapabilitiesPolicy {
     ElementCall,
 
     /**
-     * Grant the capabilities requested by the widget.
+     * Deny every capability requested by the widget.
      *
-     * Callers must only use this after the requested capabilities have been explicitly approved by the user.
+     * This is suitable for generic widgets until the SDK exposes asynchronous capability acquisition,
+     * which is required to implement an interactive permission prompt safely.
      */
-    UserApproved,
+    DenyAll,
 }
