@@ -38,6 +38,7 @@ import io.element.android.libraries.matrix.api.room.roomNotificationSettings
 import io.element.android.libraries.matrix.api.room.threads.ThreadsListService
 import io.element.android.libraries.matrix.api.roomdirectory.RoomVisibility
 import io.element.android.libraries.matrix.api.timeline.Timeline
+import io.element.android.libraries.matrix.api.widget.MatrixWidgetCapabilitiesPolicy
 import io.element.android.libraries.matrix.api.widget.MatrixWidgetDriver
 import io.element.android.libraries.matrix.api.widget.MatrixWidgetSettings
 import io.element.android.libraries.matrix.impl.core.RustSendHandle
@@ -472,14 +473,21 @@ class JoinedRustRoom(
         }
     }
 
-    override fun getWidgetDriver(widgetSettings: MatrixWidgetSettings): Result<MatrixWidgetDriver> {
+    override fun getWidgetDriver(
+        widgetSettings: MatrixWidgetSettings,
+        capabilitiesPolicy: MatrixWidgetCapabilitiesPolicy,
+    ): Result<MatrixWidgetDriver> {
         return runCatchingExceptions {
             RustWidgetDriver(
                 widgetSettings = widgetSettings,
                 room = innerRoom,
                 widgetCapabilitiesProvider = object : WidgetCapabilitiesProvider {
                     override fun acquireCapabilities(capabilities: WidgetCapabilities): WidgetCapabilities {
-                        return getElementCallRequiredPermissions(sessionId.value, baseRoom.deviceId.value)
+                        return when (capabilitiesPolicy) {
+                            MatrixWidgetCapabilitiesPolicy.ElementCall ->
+                                getElementCallRequiredPermissions(sessionId.value, baseRoom.deviceId.value)
+                            MatrixWidgetCapabilitiesPolicy.UserApproved -> capabilities
+                        }
                     }
                 },
             )
