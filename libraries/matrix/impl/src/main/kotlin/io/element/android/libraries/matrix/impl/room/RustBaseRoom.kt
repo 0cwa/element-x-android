@@ -22,6 +22,7 @@ import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.room.RoomMember
 import io.element.android.libraries.matrix.api.room.RoomMembersState
 import io.element.android.libraries.matrix.api.room.RoomMembershipObserver
+import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.draft.ComposerDraft
 import io.element.android.libraries.matrix.api.room.powerlevels.RoomPermissions
 import io.element.android.libraries.matrix.api.room.powerlevels.RoomPowerLevelsValues
@@ -291,6 +292,12 @@ class RustBaseRoom(
             innerRoom.loadOrFetchEvent(eventId.value).use {
                 it.threadRootEventId()?.let(::ThreadId)
             }
+        }
+    }
+
+    override suspend fun getStateEventContents(eventType: StateEventType): Result<List<String>> = withContext(roomDispatcher) {
+        runCatchingExceptions {
+            innerRoom.getStateEvents(eventType.map()).map { stateEvent -> stateEvent.contentJson }
         }
     }
 }
