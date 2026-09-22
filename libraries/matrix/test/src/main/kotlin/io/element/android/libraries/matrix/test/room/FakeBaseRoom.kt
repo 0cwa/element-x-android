@@ -206,6 +206,7 @@ class FakeBaseRoom(
     override suspend fun threadRootIdForEvent(eventId: EventId): Result<ThreadId?> {
         return threadRootIdForEventResult(eventId)
     }
+
 }
 
 fun defaultRoomPowerLevelValues() = RoomPowerLevelsValues(
