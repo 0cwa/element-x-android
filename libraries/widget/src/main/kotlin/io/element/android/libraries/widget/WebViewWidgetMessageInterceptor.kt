@@ -173,14 +173,16 @@ class WebViewWidgetMessageInterceptor(
             }
         }
 
-        // Always register JavascriptInterface as the baseline message channel.
-        // This works on all WebView implementations including Huawei.
-        webView.addJavascriptInterface(object {
-            @JavascriptInterface
-            fun postMessage(json: String?) {
-                onMessageReceived(json)
-            }
-        }, LISTENER_NAME)
+        // The JavascriptInterface fallback has no origin information, so it is only safe for the
+        // trusted Element Call flow. Third-party widgets must use the origin-aware listener below.
+        if (widgetOrigin == null) {
+            webView.addJavascriptInterface(object {
+                @JavascriptInterface
+                fun postMessage(json: String?) {
+                    onMessageReceived(json)
+                }
+            }, LISTENER_NAME)
+        }
 
         // Additionally register WebMessageListener on WebViews that reliably support it.
         // Huawei WebView (Chromium < 119) reports WEB_MESSAGE_LISTENER as supported
@@ -190,8 +192,14 @@ class WebViewWidgetMessageInterceptor(
         Timber.d("Using WebView version: $webViewVersionName")
         val webViewVersionCode = webViewVersionName.split(".").firstOrNull()?.toIntOrNull() ?: 0
 
-        if (webViewVersionCode >= 119 &&
-            WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+        val supportsOriginAwareMessaging = webViewVersionCode >= 119 &&
+            WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
+
+        if (widgetOrigin != null && !supportsOriginAwareMessaging) {
+            onError("This WebView version does not support secure widget messaging")
+        }
+
+        if (supportsOriginAwareMessaging) {
             WebViewCompat.addWebMessageListener(
                 webView,
                 LISTENER_NAME,
