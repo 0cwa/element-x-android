@@ -6,7 +6,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.call.impl.utils
+package io.element.android.libraries.widget
 
 import android.graphics.Bitmap
 import android.net.http.SslError
@@ -21,14 +21,21 @@ import androidx.core.net.toUri
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
-import io.element.android.features.call.impl.BuildConfig
 import kotlinx.coroutines.flow.MutableSharedFlow
+import org.json.JSONObject
 import timber.log.Timber
 
+/**
+ * Bridges widget API postMessage traffic between a WebView and the Matrix widget driver.
+ *
+ * [widgetOrigin] should be supplied for arbitrary third-party widgets so messages are accepted from,
+ * and sent to, only that origin. A null value preserves the existing Element Call wildcard behavior.
+ */
 class WebViewWidgetMessageInterceptor(
     private val webView: WebView,
     private val onUrlLoaded: (String) -> Unit,
     private val onError: (String?) -> Unit,
+    private val widgetOrigin: String? = null,
 ) : WidgetMessageInterceptor {
     companion object {
         // We call both the WebMessageListener and the JavascriptInterface objects in JS with this
@@ -94,11 +101,15 @@ class WebViewWidgetMessageInterceptor(
 
                 // We inject this JS code when the page starts loading to attach a message listener to the window.
                 // This listener will receive both messages:
-                // - EC widget API -> Element X (message.data.api == "fromWidget")
-                // - Element X -> EC widget API (message.data.api == "toWidget"), we should ignore these
+                // - Widget API -> Element X (message.data.api == "fromWidget")
+                // - Element X -> Widget API (message.data.api == "toWidget"), we should ignore these
+                val originGuard = widgetOrigin
+                    ?.let { "if (event.origin !== ${JSONObject.quote(it)}) return;" }
+                    .orEmpty()
                 view.evaluateJavascript(
                     """
                         window.addEventListener('message', function(event) {
+                            $originGuard
                             let message = {data: event.data, origin: event.origin}
                             if (message.data.response && message.data.api == "toWidget"
                                 || !message.data.response && message.data.api == "fromWidget") {
@@ -162,14 +173,16 @@ class WebViewWidgetMessageInterceptor(
             }
         }
 
-        // Always register JavascriptInterface as the baseline message channel.
-        // This works on all WebView implementations including Huawei.
-        webView.addJavascriptInterface(object {
-            @JavascriptInterface
-            fun postMessage(json: String?) {
-                onMessageReceived(json)
-            }
-        }, LISTENER_NAME)
+        // The JavascriptInterface fallback has no origin information, so it is only safe for the
+        // trusted Element Call flow. Third-party widgets must use the origin-aware listener below.
+        if (widgetOrigin == null) {
+            webView.addJavascriptInterface(object {
+                @JavascriptInterface
+                fun postMessage(json: String?) {
+                    onMessageReceived(json)
+                }
+            }, LISTENER_NAME)
+        }
 
         // Additionally register WebMessageListener on WebViews that reliably support it.
         // Huawei WebView (Chromium < 119) reports WEB_MESSAGE_LISTENER as supported
@@ -179,12 +192,18 @@ class WebViewWidgetMessageInterceptor(
         Timber.d("Using WebView version: $webViewVersionName")
         val webViewVersionCode = webViewVersionName.split(".").firstOrNull()?.toIntOrNull() ?: 0
 
-        if (webViewVersionCode >= 119 &&
-            WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+        val supportsOriginAwareMessaging = webViewVersionCode >= 119 &&
+            WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
+
+        if (widgetOrigin != null && !supportsOriginAwareMessaging) {
+            onError("This WebView version does not support secure widget messaging")
+        }
+
+        if (supportsOriginAwareMessaging) {
             WebViewCompat.addWebMessageListener(
                 webView,
                 LISTENER_NAME,
-                setOf("*"),
+                setOf(widgetOrigin ?: "*"),
                 WebViewCompat.WebMessageListener { _, message, _, _, _ ->
                     onMessageReceived(message.data)
                 }
@@ -193,7 +212,8 @@ class WebViewWidgetMessageInterceptor(
     }
 
     override fun sendMessage(message: String) {
-        webView.evaluateJavascript("postMessage($message, '*')", null)
+        val targetOrigin = widgetOrigin?.let(JSONObject::quote) ?: "'*'"
+        webView.evaluateJavascript("postMessage($message, $targetOrigin)", null)
     }
 
     private fun onMessageReceived(json: String?) {
