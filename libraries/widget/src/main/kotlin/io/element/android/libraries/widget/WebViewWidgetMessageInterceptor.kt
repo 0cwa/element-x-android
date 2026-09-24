@@ -47,10 +47,16 @@ class WebViewWidgetMessageInterceptor(
     // It's important to have extra capacity here to make sure we don't drop any messages
     override val interceptedMessages = MutableSharedFlow<String>(extraBufferCapacity = 10)
 
+    val isMessageChannelAvailable: Boolean
+
     init {
-        val assetLoader = WebViewAssetLoader.Builder()
-            .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(webView.context))
-            .build()
+        val assetLoader = if (widgetOrigin == null) {
+            WebViewAssetLoader.Builder()
+                .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(webView.context))
+                .build()
+        } else {
+            null
+        }
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
@@ -125,6 +131,27 @@ class WebViewWidgetMessageInterceptor(
                 )
             }
 
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                if (widgetOrigin != null && request.isForMainFrame &&
+                    !isAllowedWidgetNavigation(request.url.toString(), widgetOrigin)
+                ) {
+                    Timber.w("Blocked widget navigation outside expected origin")
+                    onError("Blocked navigation outside the widget origin")
+                    return true
+                }
+                return false
+            }
+
+            @Suppress("OVERRIDE_DEPRECATION")
+            override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+                if (widgetOrigin != null && !isAllowedWidgetNavigation(url, widgetOrigin)) {
+                    Timber.w("Blocked widget navigation outside expected origin")
+                    onError("Blocked navigation outside the widget origin")
+                    return true
+                }
+                return false
+            }
+
             override fun onPageFinished(view: WebView, url: String) {
                 onUrlLoaded(url)
             }
@@ -164,17 +191,18 @@ class WebViewWidgetMessageInterceptor(
             }
 
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest): WebResourceResponse? {
-                return assetLoader.shouldInterceptRequest(request.url)
+                return assetLoader?.shouldInterceptRequest(request.url)
             }
 
             @Suppress("OVERRIDE_DEPRECATION")
             override fun shouldInterceptRequest(view: WebView?, url: String): WebResourceResponse? {
-                return assetLoader.shouldInterceptRequest(url.toUri())
+                return assetLoader?.shouldInterceptRequest(url.toUri())
             }
         }
 
         // The JavascriptInterface fallback has no origin information, so it is only safe for the
-        // trusted Element Call flow. Third-party widgets must use the origin-aware listener below.
+        // trusted Element Call flow. Generic third-party widgets rely on the origin-aware
+        // WebMessageListener below.
         if (widgetOrigin == null) {
             webView.addJavascriptInterface(object {
                 @JavascriptInterface
@@ -195,7 +223,8 @@ class WebViewWidgetMessageInterceptor(
         val supportsOriginAwareMessaging = webViewVersionCode >= 119 &&
             WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
 
-        if (widgetOrigin != null && !supportsOriginAwareMessaging) {
+        isMessageChannelAvailable = widgetOrigin == null || supportsOriginAwareMessaging
+        if (!isMessageChannelAvailable) {
             onError("This WebView version does not support secure widget messaging")
         }
 
