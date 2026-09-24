@@ -66,6 +66,7 @@ class FakeJoinedRoom(
     private val progressCallbackValues: List<Pair<Long, Long>> = emptyList(),
     private val generateWidgetWebViewUrlResult: (MatrixWidgetSettings, String, String?, String?) -> Result<String> = { _, _, _, _ -> lambdaError() },
     private val getWidgetDriverResult: (MatrixWidgetSettings) -> Result<MatrixWidgetDriver> = { lambdaError() },
+    private val onGetWidgetDriver: (MatrixWidgetSettings, MatrixWidgetCapabilitiesPolicy) -> Unit = { _, _ -> },
     private val typingNoticeResult: (Boolean) -> Result<Unit> = { lambdaError() },
     private val inviteUserResult: (UserId) -> Result<Unit> = { lambdaError() },
     private val setNameResult: (String) -> Result<Unit> = { lambdaError() },
@@ -225,6 +226,7 @@ class FakeJoinedRoom(
         widgetSettings: MatrixWidgetSettings,
         capabilitiesPolicy: MatrixWidgetCapabilitiesPolicy,
     ): Result<MatrixWidgetDriver> {
+        onGetWidgetDriver(widgetSettings, capabilitiesPolicy)
         return getWidgetDriverResult(widgetSettings)
     }
 

@@ -45,5 +45,8 @@ data class WidgetMessage(
 
         @SerialName("content_loaded")
         ContentLoaded,
+
+        @SerialName("supported_api_versions")
+        SupportedApiVersions,
     }
 }
