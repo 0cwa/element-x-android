@@ -29,6 +29,9 @@ class DynamicHttpLoggingInterceptor(
     private val loggingInterceptor: HttpLoggingInterceptor,
 ) : Interceptor by loggingInterceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
+        if (chain.request().tag(SkipHttpLogging::class.java) != null) {
+            return chain.proceed(chain.request())
+        }
         // This is called in a separate thread, so calling `runBlocking` here should be fine, it should be also instant after the value is cached
         val logLevel = runBlocking { appPreferencesStore.getTracingLogLevelFlow().first() }
         loggingInterceptor.level = if (logLevel >= LogLevel.DEBUG) Level.BODY else Level.NONE

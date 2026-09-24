@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Copyright (c) 2026 Element Creations Ltd.
+  ~
+  ~ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+  ~ Please see LICENSE files in the repository root for full details.
+  -->
+
+<resources>
+    <string name="screen_widget_label">"Widget"</string>
+    <string name="screen_widget_permission_added_by">"Widget added by"</string>
+    <string name="screen_widget_permission_shared_data_warning">"Using this widget may share data with %1$s."</string>
+    <string name="screen_widget_permission_cookie_warning">"This widget may use cookies."</string>
+    <string name="screen_widget_permission_unencrypted_warning">"Widgets do not use message encryption."</string>
+    <string name="screen_widget_permission_shared_data_title">"Data that may be shared"</string>
+    <string name="screen_widget_permission_shared_data_name">"Your display name"</string>
+    <string name="screen_widget_permission_shared_data_avatar">"Your profile picture URL"</string>
+    <string name="screen_widget_permission_shared_data_user_id">"Your user ID"</string>
+    <string name="screen_widget_permission_shared_data_device_id">"Your device ID"</string>
+    <string name="screen_widget_permission_shared_data_language">"Your language"</string>
+    <string name="screen_widget_permission_shared_data_theme">"Your theme"</string>
+    <string name="screen_widget_permission_shared_data_element_url">"Element URL"</string>
+    <string name="screen_widget_permission_shared_data_room_id">"Room ID"</string>
+    <string name="screen_widget_permission_shared_data_widget_id">"Widget ID"</string>
+    <string name="screen_widget_permission_request_title">"Allow widget access?"</string>
+    <string name="screen_widget_permission_request_content">"Allow %1$s to use %2$s?"</string>
+    <string name="screen_widget_permission_request_camera">"camera"</string>
+    <string name="screen_widget_permission_request_microphone">"microphone"</string>
+</resources>
