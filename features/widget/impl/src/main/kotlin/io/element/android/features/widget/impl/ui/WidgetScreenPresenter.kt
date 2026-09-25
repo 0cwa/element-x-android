@@ -344,13 +344,10 @@ class WidgetScreenPresenter(
     private fun parseOpenIdRequest(message: String): PendingOpenIdRequest? {
         return runCatchingExceptions {
             val json = JSONObject(message)
-            if (json.optString("api") != "fromWidget" ||
-                json.optString("widgetId") != widgetActivityData.widgetId ||
-                json.optString("action") != "get_openid" ||
-                json.has("response")
-            ) {
-                return@runCatchingExceptions null
-            }
+            if (json.optString("api") != "fromWidget") return@runCatchingExceptions null
+            if (json.optString("widgetId") != widgetActivityData.widgetId) return@runCatchingExceptions null
+            if (json.optString("action") != "get_openid") return@runCatchingExceptions null
+            if (json.has("response")) return@runCatchingExceptions null
             val requestId = json.optString("requestId").takeIf { it.isNotBlank() }
                 ?: return@runCatchingExceptions null
             PendingOpenIdRequest(rawMessage = message, requestId = requestId)
