@@ -17,7 +17,9 @@ import org.matrix.rustcomponents.sdk.generateWebviewUrl
 fun MatrixWidgetSettings.toRustWidgetSettings() = WidgetSettings(
     widgetId = this.id,
     initAfterContentLoad = this.initAfterContentLoad,
-    rawUrl = this.rawUrl,
+    // matrix-widget-api and Element Web use the MSC3819 device-id placeholder, while
+    // the Rust widget URL generator currently only recognizes the MSC2873 spelling.
+    rawUrl = this.rawUrl.replace(MSC3819_DEVICE_ID_PLACEHOLDER, RUST_DEVICE_ID_PLACEHOLDER),
 )
 
 fun MatrixWidgetSettings.Companion.fromRustWidgetSettings(widgetSettings: WidgetSettings) = MatrixWidgetSettings(
@@ -40,3 +42,6 @@ suspend fun MatrixWidgetSettings.generateWidgetWebViewUrl(
         theme = theme,
     )
 )
+
+private const val MSC3819_DEVICE_ID_PLACEHOLDER = "\$org.matrix.msc3819.matrix_device_id"
+private const val RUST_DEVICE_ID_PLACEHOLDER = "\$org.matrix.msc2873.matrix_device_id"

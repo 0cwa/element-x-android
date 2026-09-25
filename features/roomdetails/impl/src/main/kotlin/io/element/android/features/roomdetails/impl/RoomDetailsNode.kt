@@ -28,6 +28,8 @@ import io.element.android.libraries.androidutils.system.startSharePlainTextInten
 import io.element.android.libraries.architecture.appyx.launchMolecule
 import io.element.android.libraries.architecture.callback
 import io.element.android.libraries.di.RoomScope
+import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.notification.CallIntent
 import io.element.android.libraries.matrix.api.room.BaseRoom
@@ -46,6 +48,7 @@ class RoomDetailsNode(
     private val room: BaseRoom,
     private val analyticsService: AnalyticsService,
     private val leaveRoomRenderer: LeaveRoomRenderer,
+    private val featureFlagService: FeatureFlagService,
 ) : Node(buildContext, plugins = plugins), RoomDetailsNavigator {
     interface Callback : Plugin {
         fun navigateBack()
@@ -56,6 +59,7 @@ class RoomDetailsNode(
         fun navigateToAvatarPreview(name: String, url: String)
         fun navigateToPollHistory()
         fun navigateToMediaGallery()
+        fun navigateToExtensions()
         fun navigateToAdminSettings()
         fun navigateToPinnedMessagesList()
         fun navigateToKnockRequestsList()
@@ -102,6 +106,7 @@ class RoomDetailsNode(
     override fun View(modifier: Modifier) {
         val context = LocalContext.current
         val state by stateFlow.collectAsState()
+        val showExtensions by featureFlagService.isFeatureEnabledFlow(FeatureFlags.Extensions).collectAsState(initial = false)
 
         fun onShareRoom() {
             lifecycleScope.onShareRoom(context)
@@ -130,6 +135,7 @@ class RoomDetailsNode(
             openAvatarPreview = callback::navigateToAvatarPreview,
             openPollHistory = callback::navigateToPollHistory,
             openMediaGallery = callback::navigateToMediaGallery,
+            openExtensions = if (showExtensions) callback::navigateToExtensions else null,
             openAdminSettings = callback::navigateToAdminSettings,
             onJoinCallClick = callback::navigateToRoomCall,
             onPinnedMessagesClick = callback::navigateToPinnedMessagesList,
