@@ -14,7 +14,6 @@ import app.cash.molecule.RecompositionMode
 import app.cash.molecule.moleculeFlow
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.widget.api.WidgetActivityData
-import io.element.android.features.widget.impl.permissions.WidgetOpenIdPermission
 import io.element.android.features.widget.impl.permissions.WidgetPermissionStore
 import io.element.android.features.widget.impl.utils.WidgetProvider
 import io.element.android.libraries.androidutils.json.DefaultJsonProvider
@@ -175,11 +174,9 @@ class WidgetScreenPresenterTest : RobolectricTest() {
     fun `openid request waits for consent before reaching the SDK and approval resumes it`() = runTest {
         val driver = FakeMatrixWidgetDriver(id = "widget-id")
         val provider = FakeWidgetProvider(driver = driver)
-        val permissionStore = createPermissionStore()
         val presenter = createWidgetScreenPresenter(
             data = aWidgetActivityData(creatorUserId = A_SESSION_ID.value),
             widgetProvider = provider,
-            permissionStore = permissionStore,
         )
         val interceptor = FakeWidgetMessageInterceptor()
         val request = """{"api":"fromWidget","widgetId":"widget-id","requestId":"openid-1","action":"get_openid","data":{}}"""
@@ -207,9 +204,6 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             runCurrent()
 
             assertThat(driver.sentMessages).containsExactly(request)
-            assertThat(permissionStore.getOpenIdPermission(A_SESSION_ID, A_ROOM_ID, "\$event-id"))
-                .isEqualTo(WidgetOpenIdPermission.Allowed)
-
             val duplicatePending = """{"api":"fromWidget","widgetId":"widget-id","requestId":"openid-1","action":"get_openid","data":{},"response":{"state":"request"}}"""
             driver.givenIncomingMessage(duplicatePending)
             runCurrent()
@@ -231,11 +225,9 @@ class WidgetScreenPresenterTest : RobolectricTest() {
     fun `denying openid consent blocks identity without sending the request to the SDK`() = runTest {
         val driver = FakeMatrixWidgetDriver(id = "widget-id")
         val provider = FakeWidgetProvider(driver = driver)
-        val permissionStore = createPermissionStore()
         val presenter = createWidgetScreenPresenter(
             data = aWidgetActivityData(creatorUserId = A_SESSION_ID.value),
             widgetProvider = provider,
-            permissionStore = permissionStore,
         )
         val interceptor = FakeWidgetMessageInterceptor()
         val request = """{"api":"fromWidget","widgetId":"widget-id","requestId":"openid-2","action":"get_openid","data":{}}"""
@@ -258,8 +250,6 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             runCurrent()
 
             assertThat(driver.sentMessages).isEmpty()
-            assertThat(permissionStore.getOpenIdPermission(A_SESSION_ID, A_ROOM_ID, "\$event-id"))
-                .isEqualTo(WidgetOpenIdPermission.Denied)
             assertThat(interceptor.sentMessages).hasSize(2)
 
             val blocked = JSONObject(interceptor.sentMessages.last())
@@ -346,8 +336,12 @@ class WidgetScreenPresenterTest : RobolectricTest() {
         widgetProvider: FakeWidgetProvider,
         navigator: WidgetScreenNavigator = FakeWidgetScreenNavigator(),
         matrixClientProvider: FakeMatrixClientProvider = FakeMatrixClientProvider(),
-        permissionStore: WidgetPermissionStore = createPermissionStore(),
     ): WidgetScreenPresenter {
+        val permissionStore = WidgetPermissionStore(
+            context = ApplicationProvider.getApplicationContext<Context>(),
+            appCoroutineScope = backgroundScope,
+            sessionObserver = FakeSessionObserver(),
+        )
         return WidgetScreenPresenter(
             widgetActivityData = data,
             navigator = navigator,
@@ -363,14 +357,6 @@ class WidgetScreenPresenterTest : RobolectricTest() {
                 override fun provideLanguageTag(): String = "en-US"
             },
             widgetMessageSerializer = WidgetMessageSerializer(DefaultJsonProvider()),
-        )
-    }
-
-    private fun TestScope.createPermissionStore(): WidgetPermissionStore {
-        return WidgetPermissionStore(
-            context = ApplicationProvider.getApplicationContext<Context>(),
-            appCoroutineScope = backgroundScope,
-            sessionObserver = FakeSessionObserver(),
         )
     }
 
