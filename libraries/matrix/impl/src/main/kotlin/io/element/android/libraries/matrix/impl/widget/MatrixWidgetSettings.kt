@@ -43,6 +43,5 @@ suspend fun MatrixWidgetSettings.generateWidgetWebViewUrl(
     )
 )
 
-
 private const val MSC3819_DEVICE_ID_PLACEHOLDER = "\$org.matrix.msc3819.matrix_device_id"
 private const val RUST_DEVICE_ID_PLACEHOLDER = "\$org.matrix.msc2873.matrix_device_id"
