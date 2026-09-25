@@ -33,6 +33,8 @@ class ExtensionsPresenter(
     @Composable
     fun present(): ExtensionsState {
         val extensions = remember { mutableStateOf(emptyList<ExtensionItem>()) }
+        val isLoading = remember { mutableStateOf(true) }
+        val hasLoadError = remember { mutableStateOf(false) }
 
         LaunchedEffect(room) {
             var isInitialEmission = true
@@ -52,9 +54,15 @@ class ExtensionsPresenter(
                         extensions.value = stateEvents.mapNotNull { event ->
                             parseWidgetStateEvent(event)
                         }
+                        hasLoadError.value = false
+                        isLoading.value = false
                     }
                     .onFailure { error ->
                         Timber.e(error, "Failed to fetch widget state events")
+                        if (extensions.value.isEmpty()) {
+                            hasLoadError.value = true
+                        }
+                        isLoading.value = false
                     }
             }
         }
@@ -81,6 +89,8 @@ class ExtensionsPresenter(
 
         return ExtensionsState(
             extensions = extensions.value.toImmutableList(),
+            isLoading = isLoading.value,
+            hasLoadError = hasLoadError.value,
             eventSink = ::handleEvent,
         )
     }
