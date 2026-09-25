@@ -170,6 +170,39 @@ class WidgetScreenPresenterTest : RobolectricTest() {
     }
 
     @Test
+    fun `openid request and response are relayed unchanged`() = runTest {
+        val driver = FakeMatrixWidgetDriver(id = "widget-id")
+        val provider = FakeWidgetProvider(driver = driver)
+        val presenter = createWidgetScreenPresenter(
+            data = aWidgetActivityData(creatorUserId = A_SESSION_ID.value),
+            widgetProvider = provider,
+        )
+        val interceptor = FakeWidgetMessageInterceptor()
+        val request = """{"api":"fromWidget","widgetId":"widget-id","requestId":"openid-1","action":"get_openid","data":{}}"""
+        val response = """{"api":"fromWidget","widgetId":"widget-id","requestId":"openid-1","action":"get_openid","data":{},"response":{"matrix_server_name":"example.org","access_token":"secret-token","expires_in":3600}}"""
+
+        presenter.test {
+            var state = awaitItem()
+            while (state.urlState !is AsyncData.Success) {
+                state = awaitItem()
+            }
+
+            state.eventSink(WidgetScreenEvents.SetMessageInterceptor(interceptor))
+            runCurrent()
+
+            interceptor.givenInterceptedMessage(request)
+            runCurrent()
+            assertThat(driver.sentMessages).containsExactly(request)
+
+            driver.givenIncomingMessage(response)
+            runCurrent()
+            assertThat(interceptor.sentMessages).containsExactly(response)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `closing a loaded widget sends close message before shutdown`() = runTest {
         val driver = FakeMatrixWidgetDriver(id = "widget-id")
         val provider = FakeWidgetProvider(driver = driver)
