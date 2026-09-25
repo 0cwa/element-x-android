@@ -165,7 +165,7 @@ enum class FeatureFlags(
         key = "feature.extensions",
         title = "Room extensions",
         description = "Allow opening room widgets from room details.",
-        defaultValue = { false },
+        defaultValue = { buildMeta -> buildMeta.buildType != BuildType.RELEASE },
         isFinished = false,
     ),
     NewTimelineEventRenderer(
