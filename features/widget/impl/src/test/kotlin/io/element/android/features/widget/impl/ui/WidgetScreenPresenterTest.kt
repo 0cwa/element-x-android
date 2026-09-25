@@ -140,6 +140,68 @@ class WidgetScreenPresenterTest : RobolectricTest() {
     }
 
     @Test
+    fun `iframe-load widget driver starts only after the secure bridge and page are ready`() = runTest {
+        val driver = FakeMatrixWidgetDriver(id = "widget-id")
+        val provider = FakeWidgetProvider(driver = driver)
+        val presenter = createWidgetScreenPresenter(
+            data = aWidgetActivityData(
+                creatorUserId = A_SESSION_ID.value,
+                waitForIframeLoad = true,
+            ),
+            widgetProvider = provider,
+        )
+        val interceptor = FakeWidgetMessageInterceptor()
+
+        presenter.test {
+            var state = awaitItem()
+            while (state.urlState !is AsyncData.Success) {
+                state = awaitItem()
+            }
+
+            assertThat(driver.runCalledCount).isEqualTo(0)
+
+            state.eventSink(WidgetScreenEvents.SetMessageInterceptor(interceptor))
+            runCurrent()
+            assertThat(driver.runCalledCount).isEqualTo(0)
+
+            state.eventSink(WidgetScreenEvents.OnWebViewLoaded)
+            runCurrent()
+            assertThat(driver.runCalledCount).isEqualTo(1)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `content-loaded widget driver starts as soon as the secure bridge is ready`() = runTest {
+        val driver = FakeMatrixWidgetDriver(id = "widget-id")
+        val provider = FakeWidgetProvider(driver = driver)
+        val presenter = createWidgetScreenPresenter(
+            data = aWidgetActivityData(
+                creatorUserId = A_SESSION_ID.value,
+                waitForIframeLoad = false,
+            ),
+            widgetProvider = provider,
+        )
+        val interceptor = FakeWidgetMessageInterceptor()
+
+        presenter.test {
+            var state = awaitItem()
+            while (state.urlState !is AsyncData.Success) {
+                state = awaitItem()
+            }
+
+            assertThat(driver.runCalledCount).isEqualTo(0)
+
+            state.eventSink(WidgetScreenEvents.SetMessageInterceptor(interceptor))
+            runCurrent()
+            assertThat(driver.runCalledCount).isEqualTo(1)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `replacing message interceptor moves widget message collection to the new bridge`() = runTest {
         val driver = FakeMatrixWidgetDriver(id = "widget-id")
         val provider = FakeWidgetProvider(driver = driver)
@@ -188,6 +250,7 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             }
 
             state.eventSink(WidgetScreenEvents.SetMessageInterceptor(interceptor))
+            state.eventSink(WidgetScreenEvents.OnWebViewLoaded)
             runCurrent()
             interceptor.givenInterceptedMessage(request)
             runCurrent()
@@ -239,6 +302,7 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             }
 
             state.eventSink(WidgetScreenEvents.SetMessageInterceptor(interceptor))
+            state.eventSink(WidgetScreenEvents.OnWebViewLoaded)
             runCurrent()
             interceptor.givenInterceptedMessage(request)
             runCurrent()
@@ -363,6 +427,7 @@ class WidgetScreenPresenterTest : RobolectricTest() {
     private fun aWidgetActivityData(
         creatorUserId: String,
         url: String = "https://widget.example/path",
+        waitForIframeLoad: Boolean = true,
     ) = WidgetActivityData(
         sessionId = A_SESSION_ID,
         roomId = A_ROOM_ID,
@@ -371,7 +436,7 @@ class WidgetScreenPresenterTest : RobolectricTest() {
         creatorUserId = creatorUserId,
         url = url,
         widgetName = "Widget",
-        waitForIframeLoad = true,
+        waitForIframeLoad = waitForIframeLoad,
         isRoomEncrypted = true,
     )
 
