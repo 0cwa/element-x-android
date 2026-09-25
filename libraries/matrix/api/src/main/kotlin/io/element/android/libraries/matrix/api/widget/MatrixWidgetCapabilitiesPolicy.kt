@@ -23,6 +23,9 @@ enum class MatrixWidgetCapabilitiesPolicy {
      *
      * This is suitable for generic widgets until the SDK exposes asynchronous capability acquisition,
      * which is required to implement an interactive permission prompt safely.
+     *
+     * This only denies negotiated Matrix read/send capabilities. The SDK handles core Widget API
+     * requests such as `get_openid` separately, so widgets can still authenticate the current user.
      */
     DenyAll,
 }
