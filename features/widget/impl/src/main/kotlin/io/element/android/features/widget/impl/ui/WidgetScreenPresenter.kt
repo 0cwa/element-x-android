@@ -289,6 +289,11 @@ class WidgetScreenPresenter(
                     }
                 }
                 is WidgetScreenEvents.SetMessageInterceptor -> {
+                    if (event.interceptor == null) {
+                        pendingOpenIdRequest = null
+                        suppressedOpenIdPendingRequestIds.clear()
+                        syntheticOpenIdRequestIds.clear()
+                    }
                     messageInterceptor.value = event.interceptor
                 }
                 is WidgetScreenEvents.OnWebViewError -> {
