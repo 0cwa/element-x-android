@@ -110,7 +110,6 @@ class WebViewWidgetMessageInterceptor(
                         """.trimIndent(),
                         null
                     )
-    
                 }
 
                 // We inject this JS code when the page starts loading to attach a message listener to the window.
