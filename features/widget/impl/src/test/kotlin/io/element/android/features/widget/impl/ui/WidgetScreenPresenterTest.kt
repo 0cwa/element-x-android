@@ -233,6 +233,35 @@ class WidgetScreenPresenterTest : RobolectricTest() {
     }
 
     @Test
+    fun `openid request for another widget cannot trigger identity consent`() = runTest {
+        val driver = FakeMatrixWidgetDriver(id = "widget-id")
+        val presenter = createWidgetScreenPresenter(
+            data = aWidgetActivityData(creatorUserId = A_SESSION_ID.value),
+            widgetProvider = FakeWidgetProvider(driver = driver),
+        )
+        val interceptor = FakeWidgetMessageInterceptor()
+        val request = """{"api":"fromWidget","widgetId":"other-widget","requestId":"openid-other","action":"get_openid","data":{}}"""
+
+        presenter.test {
+            var state = awaitItem()
+            while (state.urlState !is AsyncData.Success) {
+                state = awaitItem()
+            }
+
+            state.eventSink(WidgetScreenEvents.SetMessageInterceptor(interceptor))
+            state.eventSink(WidgetScreenEvents.OnWebViewLoaded)
+            runCurrent()
+            interceptor.givenInterceptedMessage(request)
+            runCurrent()
+
+            assertThat(state.isOpenIdPermissionRequired).isFalse()
+            assertThat(interceptor.sentMessages).isEmpty()
+            assertThat(driver.sentMessages).containsExactly(request)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `openid request waits for consent before reaching the SDK and approval resumes it`() = runTest {
         val driver = FakeMatrixWidgetDriver(id = "widget-id")
         val provider = FakeWidgetProvider(driver = driver)
