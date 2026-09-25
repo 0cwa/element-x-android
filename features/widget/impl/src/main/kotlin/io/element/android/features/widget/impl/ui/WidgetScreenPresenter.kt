@@ -97,6 +97,7 @@ class WidgetScreenPresenter(
         }
         var isWidgetLoaded by rememberSaveable { mutableStateOf(false) }
         var ignoreWebViewError by rememberSaveable { mutableStateOf(false) }
+        var isWebViewLoaded by rememberSaveable { mutableStateOf(false) }
         var webViewError by remember { mutableStateOf<String?>(null) }
         var preloadPermission by remember { mutableStateOf<WidgetPreloadPermission>(WidgetPreloadPermission.Checking) }
         var pendingOpenIdRequest by remember { mutableStateOf<PendingOpenIdRequest?>(null) }
@@ -126,8 +127,11 @@ class WidgetScreenPresenter(
             }
         }
 
-        widgetDriver.value?.let { driver ->
-            LaunchedEffect(driver) {
+        val driver = widgetDriver.value
+        val interceptor = messageInterceptor.value
+        val canStartDriver = !widgetActivityData.waitForIframeLoad || isWebViewLoaded
+        if (driver != null && interceptor != null && canStartDriver) {
+            LaunchedEffect(driver, interceptor) {
                 driver.incomingMessages
                     .onEach { message ->
                         val pendingRequestId = suppressedOpenIdPendingRequestIds.firstOrNull { requestId ->
@@ -137,7 +141,7 @@ class WidgetScreenPresenter(
                             suppressedOpenIdPendingRequestIds.remove(pendingRequestId)
                         } else {
                             // Relay message to the WebView.
-                            messageInterceptor.value?.sendMessage(message)
+                            interceptor.sendMessage(message)
                         }
                     }
                     .launchIn(this)
@@ -246,11 +250,15 @@ class WidgetScreenPresenter(
                 }
                 is WidgetScreenEvents.SetMessageInterceptor -> {
                     if (event.interceptor == null) {
+                        isWebViewLoaded = false
                         pendingOpenIdRequest = null
                         suppressedOpenIdPendingRequestIds.clear()
                         syntheticOpenIdRequestIds.clear()
                     }
                     messageInterceptor.value = event.interceptor
+                }
+                is WidgetScreenEvents.OnWebViewLoaded -> {
+                    isWebViewLoaded = true
                 }
                 is WidgetScreenEvents.OnWebViewError -> {
                     if (!ignoreWebViewError) {
