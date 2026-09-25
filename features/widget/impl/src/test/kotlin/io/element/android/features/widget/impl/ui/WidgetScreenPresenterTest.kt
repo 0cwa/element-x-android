@@ -63,6 +63,10 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             }
 
             assertThat(state.preloadPermission).isEqualTo(WidgetPreloadPermission.Allowed)
+            assertThat(state.urlState.dataOrNull()).isEqualTo(
+                "https://widget.example/generated" +
+                    "?widgetId=widget-id&parentUrl=https%3A%2F%2Fwidget.example"
+            )
             assertThat(provider.callCount).isEqualTo(1)
             cancelAndIgnoreRemainingEvents()
         }
