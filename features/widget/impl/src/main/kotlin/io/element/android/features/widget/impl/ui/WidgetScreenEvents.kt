@@ -12,6 +12,8 @@ import io.element.android.libraries.widget.WidgetMessageInterceptor
 sealed interface WidgetScreenEvents {
     data object Close : WidgetScreenEvents
     data object GrantPreloadPermission : WidgetScreenEvents
+    data object GrantOpenIdPermission : WidgetScreenEvents
+    data object DenyOpenIdPermission : WidgetScreenEvents
     data class SetMessageInterceptor(val interceptor: WidgetMessageInterceptor?) : WidgetScreenEvents
     data class OnWebViewError(val description: String?) : WidgetScreenEvents
 }
