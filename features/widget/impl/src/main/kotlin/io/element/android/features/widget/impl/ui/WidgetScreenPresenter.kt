@@ -22,6 +22,7 @@ import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.features.widget.api.WidgetActivityData
+import io.element.android.features.widget.impl.permissions.WidgetOpenIdPermission
 import io.element.android.features.widget.impl.permissions.WidgetPermissionStore
 import io.element.android.features.widget.impl.utils.WidgetProvider
 import io.element.android.libraries.architecture.AsyncData
@@ -42,6 +43,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import timber.log.Timber
 import java.net.URI
 import java.util.UUID
@@ -75,6 +77,8 @@ class WidgetScreenPresenter(
         val widgetDriver = remember { mutableStateOf<MatrixWidgetDriver?>(null) }
         val messageInterceptor = remember { mutableStateOf<WidgetMessageInterceptor?>(null) }
         val driverClosed = remember { AtomicBoolean(false) }
+        val suppressedOpenIdPendingRequestIds = remember { mutableSetOf<String>() }
+        val syntheticOpenIdRequestIds = remember { mutableSetOf<String>() }
 
         fun closeDriver(driver: MatrixWidgetDriver?) {
             if (driver != null && driverClosed.compareAndSet(false, true)) {
@@ -96,6 +100,8 @@ class WidgetScreenPresenter(
         var ignoreWebViewError by rememberSaveable { mutableStateOf(false) }
         var webViewError by remember { mutableStateOf<String?>(null) }
         var preloadPermission by remember { mutableStateOf<WidgetPreloadPermission>(WidgetPreloadPermission.Checking) }
+        var pendingOpenIdRequest by remember { mutableStateOf<PendingOpenIdRequest?>(null) }
+        var sessionOpenIdPermission by remember { mutableStateOf(WidgetOpenIdPermission.Unknown) }
         val languageTag = languageTagProvider.provideLanguageTag()
         val theme = if (ElementTheme.isLightTheme) "light" else "dark"
         val widgetOrigin = remember(widgetActivityData.url) { widgetOrigin(widgetActivityData.url) }
@@ -125,9 +131,16 @@ class WidgetScreenPresenter(
         widgetDriver.value?.let { driver ->
             LaunchedEffect(driver) {
                 driver.incomingMessages
-                    .onEach {
-                        // Relay message to the WebView
-                        messageInterceptor.value?.sendMessage(it)
+                    .onEach { message ->
+                        val pendingRequestId = suppressedOpenIdPendingRequestIds.firstOrNull { requestId ->
+                            isOpenIdPendingResponse(message, requestId)
+                        }
+                        if (pendingRequestId != null) {
+                            suppressedOpenIdPendingRequestIds.remove(pendingRequestId)
+                        } else {
+                            // Relay message to the WebView.
+                            messageInterceptor.value?.sendMessage(message)
+                        }
                     }
                     .launchIn(this)
 
@@ -138,13 +151,50 @@ class WidgetScreenPresenter(
         messageInterceptor.value?.let { interceptor ->
             LaunchedEffect(interceptor) {
                 interceptor.interceptedMessages
-                    .onEach {
-                        // We are receiving messages from the WebView, consider that the application is loaded
+                    .onEach { message ->
+                        // We are receiving messages from the WebView, consider that the application is loaded.
                         ignoreWebViewError = true
-                        // Relay message to Widget Driver
-                        widgetDriver.value?.send(it)
 
-                        val parsedMessage = parseMessage(it)
+                        val syntheticRequestId = syntheticOpenIdResponseRequestId(message)
+                        if (syntheticRequestId != null && syntheticOpenIdRequestIds.remove(syntheticRequestId)) {
+                            return@onEach
+                        }
+
+                        val openIdRequest = parseOpenIdRequest(message)
+                        if (openIdRequest != null) {
+                            val permission = widgetActivityData.eventId?.let { eventId ->
+                                widgetPermissionStore.getOpenIdPermission(
+                                    sessionId = widgetActivityData.sessionId,
+                                    roomId = widgetActivityData.roomId,
+                                    eventId = eventId,
+                                )
+                            } ?: sessionOpenIdPermission
+
+                            when (permission) {
+                                WidgetOpenIdPermission.Allowed -> {
+                                    widgetDriver.value?.send(message)
+                                }
+                                WidgetOpenIdPermission.Denied -> {
+                                    interceptor.sendMessage(openIdInitialResponse(message, OPEN_ID_BLOCKED))
+                                }
+                                WidgetOpenIdPermission.Unknown -> {
+                                    if (pendingOpenIdRequest == null) {
+                                        interceptor.sendMessage(openIdInitialResponse(message, OPEN_ID_REQUEST))
+                                        pendingOpenIdRequest = openIdRequest
+                                    } else {
+                                        // Only show one identity prompt at a time. Reject parallel requests instead
+                                        // of allowing a widget to stack dialogs.
+                                        interceptor.sendMessage(openIdInitialResponse(message, OPEN_ID_BLOCKED))
+                                    }
+                                }
+                            }
+                            return@onEach
+                        }
+
+                        // Relay all other widget messages to the SDK driver.
+                        widgetDriver.value?.send(message)
+
+                        val parsedMessage = parseMessage(message)
                         val loadedIndicatorWidgetAction = if (initAfterContentLoad) {
                             WidgetMessage.Action.ContentLoaded
                         } else {
@@ -174,6 +224,50 @@ class WidgetScreenPresenter(
                             )
                         }
                         preloadPermission = WidgetPreloadPermission.Allowed
+                    }
+                }
+                is WidgetScreenEvents.GrantOpenIdPermission -> {
+                    val request = pendingOpenIdRequest ?: return
+                    pendingOpenIdRequest = null
+                    coroutineScope.launch {
+                        val eventId = widgetActivityData.eventId
+                        if (eventId == null) {
+                            sessionOpenIdPermission = WidgetOpenIdPermission.Allowed
+                        } else {
+                            widgetPermissionStore.setOpenIdPermission(
+                                sessionId = widgetActivityData.sessionId,
+                                roomId = widgetActivityData.roomId,
+                                eventId = eventId,
+                                permission = WidgetOpenIdPermission.Allowed,
+                            )
+                        }
+                        suppressedOpenIdPendingRequestIds += request.requestId
+                        widgetDriver.value?.send(request.rawMessage)
+                    }
+                }
+                is WidgetScreenEvents.DenyOpenIdPermission -> {
+                    val request = pendingOpenIdRequest ?: return
+                    pendingOpenIdRequest = null
+                    coroutineScope.launch {
+                        val eventId = widgetActivityData.eventId
+                        if (eventId == null) {
+                            sessionOpenIdPermission = WidgetOpenIdPermission.Denied
+                        } else {
+                            widgetPermissionStore.setOpenIdPermission(
+                                sessionId = widgetActivityData.sessionId,
+                                roomId = widgetActivityData.roomId,
+                                eventId = eventId,
+                                permission = WidgetOpenIdPermission.Denied,
+                            )
+                        }
+                        messageInterceptor.value?.let { interceptor ->
+                            val (requestId, blockedMessage) = blockedOpenIdCredentialsMessage(
+                                widgetId = widgetActivityData.widgetId,
+                                originalRequestId = request.requestId,
+                            )
+                            syntheticOpenIdRequestIds += requestId
+                            interceptor.sendMessage(blockedMessage)
+                        }
                     }
                 }
                 is WidgetScreenEvents.Close -> {
@@ -213,6 +307,7 @@ class WidgetScreenPresenter(
             webViewError = webViewError,
             userAgent = userAgent,
             isWidgetLoaded = isWidgetLoaded,
+            isOpenIdPermissionRequired = pendingOpenIdRequest != null,
             widgetName = widgetActivityData.widgetName,
             eventSink = ::handleEvent,
         )
@@ -277,6 +372,70 @@ class WidgetScreenPresenter(
         return widgetMessageSerializer.deserialize(message).getOrNull()
     }
 
+    private fun parseOpenIdRequest(message: String): PendingOpenIdRequest? {
+        return runCatchingExceptions {
+            val json = JSONObject(message)
+            if (json.optString("api") != "fromWidget" ||
+                json.optString("action") != "get_openid" ||
+                json.has("response")
+            ) {
+                return@runCatchingExceptions null
+            }
+            val requestId = json.optString("requestId").takeIf { it.isNotBlank() }
+                ?: return@runCatchingExceptions null
+            PendingOpenIdRequest(rawMessage = message, requestId = requestId)
+        }.getOrNull()
+    }
+
+    private fun openIdInitialResponse(message: String, state: String): String {
+        return JSONObject(message)
+            .put("response", JSONObject().put("state", state))
+            .toString()
+    }
+
+    private fun isOpenIdPendingResponse(message: String, requestId: String): Boolean {
+        return runCatchingExceptions {
+            val json = JSONObject(message)
+            json.optString("api") == "fromWidget" &&
+                json.optString("action") == "get_openid" &&
+                json.optString("requestId") == requestId &&
+                json.optJSONObject("response")?.optString("state") == OPEN_ID_REQUEST
+        }.getOrDefault(false)
+    }
+
+    private fun blockedOpenIdCredentialsMessage(
+        widgetId: String,
+        originalRequestId: String,
+    ): Pair<String, String> {
+        val requestId = "widgetapi-${UUID.randomUUID()}"
+        val message = JSONObject()
+            .put("api", "toWidget")
+            .put("widgetId", widgetId)
+            .put("requestId", requestId)
+            .put("action", "openid_credentials")
+            .put(
+                "data",
+                JSONObject()
+                    .put("state", OPEN_ID_BLOCKED)
+                    .put("original_request_id", originalRequestId),
+            )
+            .toString()
+        return requestId to message
+    }
+
+    private fun syntheticOpenIdResponseRequestId(message: String): String? {
+        return runCatchingExceptions {
+            val json = JSONObject(message)
+            if (json.optString("api") != "toWidget" ||
+                json.optString("action") != "openid_credentials" ||
+                !json.has("response")
+            ) {
+                return@runCatchingExceptions null
+            }
+            json.optString("requestId").takeIf { it.isNotBlank() }
+        }.getOrNull()
+    }
+
     private fun sendCloseMessage(widgetId: String, interceptor: WidgetMessageInterceptor) {
         val message = WidgetMessage(
             direction = WidgetMessage.Direction.ToWidget,
@@ -286,4 +445,14 @@ class WidgetScreenPresenter(
         )
         interceptor.sendMessage(widgetMessageSerializer.serialize(message))
     }
+
+    private companion object {
+        const val OPEN_ID_REQUEST = "request"
+        const val OPEN_ID_BLOCKED = "blocked"
+    }
 }
+
+private data class PendingOpenIdRequest(
+    val rawMessage: String,
+    val requestId: String,
+)
