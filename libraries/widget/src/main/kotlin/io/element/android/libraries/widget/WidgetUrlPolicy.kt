@@ -57,7 +57,7 @@ fun withWidgetApiBootstrapParameters(
         .orEmpty()
         .filter { parameter ->
             val rawName = parameter.substringBefore("=")
-            val name = URLDecoder.decode(rawName, StandardCharsets.UTF_8)
+            val name = URLDecoder.decode(rawName, StandardCharsets.UTF_8.name())
             name != WIDGET_ID_QUERY_PARAMETER && name != PARENT_URL_QUERY_PARAMETER
         }
         .filter { it.isNotEmpty() }
@@ -83,7 +83,7 @@ fun withWidgetApiBootstrapParameters(
 }
 
 private fun encodeQueryParameter(value: String): String {
-    return URLEncoder.encode(value, StandardCharsets.UTF_8)
+    return URLEncoder.encode(value, StandardCharsets.UTF_8.name())
 }
 
 private const val WIDGET_ID_QUERY_PARAMETER = "widgetId"
