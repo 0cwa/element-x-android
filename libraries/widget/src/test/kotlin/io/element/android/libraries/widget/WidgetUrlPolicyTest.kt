@@ -36,4 +36,34 @@ class WidgetUrlPolicyTest {
         assertThat(isAllowedWidgetNavigation("http://example.org/next", origin)).isFalse()
         assertThat(isAllowedWidgetNavigation("https://example.org:8443/next", origin)).isFalse()
     }
+
+    @Test
+    fun `widget api bootstrap parameters use the pinned origin and preserve fragments`() {
+        val url = withWidgetApiBootstrapParameters(
+            rawUrl = "https://widget.example/calendar?existing=value#/?matrix_room_id=%21room%3Aexample.org",
+            widgetId = "calendar/widget id",
+            parentOrigin = "https://widget.example",
+        )
+
+        assertThat(url).isEqualTo(
+            "https://widget.example/calendar" +
+                "?existing=value&widgetId=calendar%2Fwidget+id&parentUrl=https%3A%2F%2Fwidget.example" +
+                "#/?matrix_room_id=%21room%3Aexample.org"
+        )
+    }
+
+    @Test
+    fun `widget api bootstrap parameters replace values supplied by room state`() {
+        val url = withWidgetApiBootstrapParameters(
+            rawUrl = "https://widget.example/?widgetId=spoofed&parentUrl=https%3A%2F%2Fevil.example&keep=1",
+            widgetId = "real-widget",
+            parentOrigin = "https://widget.example",
+        )
+
+        assertThat(url).isEqualTo(
+            "https://widget.example/" +
+                "?keep=1&widgetId=real-widget&parentUrl=https%3A%2F%2Fwidget.example"
+        )
+    }
+
 }
