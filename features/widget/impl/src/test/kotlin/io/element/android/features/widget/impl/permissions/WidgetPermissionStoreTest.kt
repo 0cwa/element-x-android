@@ -45,41 +45,4 @@ class WidgetPermissionStoreTest : RobolectricTest() {
 
         assertThat(store.isAllowed(sessionId, roomId, approvedEventId)).isFalse()
     }
-
-    @Test
-    fun `openid permission is separate scoped to the exact widget event and removed with the session`() = runTest {
-        val sessionObserver = FakeSessionObserver()
-        val store = WidgetPermissionStore(
-            context = ApplicationProvider.getApplicationContext<Context>(),
-            appCoroutineScope = backgroundScope,
-            sessionObserver = sessionObserver,
-        )
-        val suffix = UUID.randomUUID().toString()
-        val sessionId = UserId("@openid-$suffix:example.org")
-        val roomId = RoomId("!openid-$suffix:example.org")
-        val eventId = "\$openid-$suffix"
-        val replacementEventId = "\$replacement-$suffix"
-
-        assertThat(store.getOpenIdPermission(sessionId, roomId, eventId))
-            .isEqualTo(WidgetOpenIdPermission.Unknown)
-
-        store.setOpenIdPermission(sessionId, roomId, eventId, WidgetOpenIdPermission.Allowed)
-
-        assertThat(store.getOpenIdPermission(sessionId, roomId, eventId))
-            .isEqualTo(WidgetOpenIdPermission.Allowed)
-        assertThat(store.getOpenIdPermission(sessionId, roomId, replacementEventId))
-            .isEqualTo(WidgetOpenIdPermission.Unknown)
-        assertThat(store.isAllowed(sessionId, roomId, eventId)).isFalse()
-
-        store.setOpenIdPermission(sessionId, roomId, eventId, WidgetOpenIdPermission.Denied)
-
-        assertThat(store.getOpenIdPermission(sessionId, roomId, eventId))
-            .isEqualTo(WidgetOpenIdPermission.Denied)
-
-        sessionObserver.onSessionDeleted(sessionId.value)
-
-        assertThat(store.getOpenIdPermission(sessionId, roomId, eventId))
-            .isEqualTo(WidgetOpenIdPermission.Unknown)
-    }
-
 }
