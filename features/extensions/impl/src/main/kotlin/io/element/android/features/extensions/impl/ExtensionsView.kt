@@ -61,28 +61,29 @@ fun ExtensionsView(
                 )
             }
             else -> {
-            LazyColumn(
-                modifier = Modifier
-                    .padding(padding)
-                    .consumeWindowInsets(padding)
-            ) {
-                items(
-                    items = state.extensions,
-                    key = { extension -> extension.widgetId },
-                ) { extension ->
-                    val displayName = extension.name ?: stringResource(R.string.screen_extensions_unknown_widget_name)
-                    ExtensionListItem(
-                        extension = extension,
-                        name = displayName,
-                        onClick = {
-                            state.eventSink(
-                                ExtensionsEvents.OnExtensionClicked(
-                                    extension = extension,
-                                    widgetName = displayName,
+                LazyColumn(
+                    modifier = Modifier
+                        .padding(padding)
+                        .consumeWindowInsets(padding)
+                ) {
+                    items(
+                        items = state.extensions,
+                        key = { extension -> extension.widgetId },
+                    ) { extension ->
+                        val displayName = extension.name ?: stringResource(R.string.screen_extensions_unknown_widget_name)
+                        ExtensionListItem(
+                            extension = extension,
+                            name = displayName,
+                            onClick = {
+                                state.eventSink(
+                                    ExtensionsEvents.OnExtensionClicked(
+                                        extension = extension,
+                                        widgetName = displayName,
+                                    )
                                 )
-                            )
-                        },
-                    )
+                            },
+                        )
+                    }
                 }
             }
         }
