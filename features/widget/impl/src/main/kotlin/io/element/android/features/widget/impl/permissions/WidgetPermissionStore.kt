@@ -26,14 +26,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 
 private val allowedWidgetsKey = stringSetPreferencesKey("allowedWidgets")
-private val allowedOpenIdWidgetsKey = stringSetPreferencesKey("allowedOpenIdWidgets")
-private val deniedOpenIdWidgetsKey = stringSetPreferencesKey("deniedOpenIdWidgets")
-
-enum class WidgetOpenIdPermission {
-    Unknown,
-    Allowed,
-    Denied,
-}
 
 @SingleIn(AppScope::class)
 @Inject
@@ -65,52 +57,13 @@ class WidgetPermissionStore(
         }
     }
 
-    suspend fun getOpenIdPermission(
-        sessionId: SessionId,
-        roomId: RoomId,
-        eventId: String,
-    ): WidgetOpenIdPermission {
-        val key = permissionKey(sessionId, roomId, eventId)
-        val preferences = store.data.first()
-        return when {
-            key in preferences[deniedOpenIdWidgetsKey].orEmpty() -> WidgetOpenIdPermission.Denied
-            key in preferences[allowedOpenIdWidgetsKey].orEmpty() -> WidgetOpenIdPermission.Allowed
-            else -> WidgetOpenIdPermission.Unknown
-        }
-    }
-
-    suspend fun setOpenIdPermission(
-        sessionId: SessionId,
-        roomId: RoomId,
-        eventId: String,
-        permission: WidgetOpenIdPermission,
-    ) {
-        val key = permissionKey(sessionId, roomId, eventId)
-        store.edit { preferences ->
-            val allowed = preferences[allowedOpenIdWidgetsKey].orEmpty() - key
-            val denied = preferences[deniedOpenIdWidgetsKey].orEmpty() - key
-            preferences[allowedOpenIdWidgetsKey] = if (permission == WidgetOpenIdPermission.Allowed) {
-                allowed + key
-            } else {
-                allowed
-            }
-            preferences[deniedOpenIdWidgetsKey] = if (permission == WidgetOpenIdPermission.Denied) {
-                denied + key
-            } else {
-                denied
-            }
-        }
-    }
-
     private suspend fun clearSession(sessionId: SessionId) {
         val prefix = sessionPrefix(sessionId)
         store.edit { preferences ->
-            listOf(allowedWidgetsKey, allowedOpenIdWidgetsKey, deniedOpenIdWidgetsKey).forEach { key ->
-                preferences[key] = preferences[key]
-                    .orEmpty()
-                    .filterNot { it.startsWith(prefix) }
-                    .toSet()
-            }
+            preferences[allowedWidgetsKey] = preferences[allowedWidgetsKey]
+                .orEmpty()
+                .filterNot { it.startsWith(prefix) }
+                .toSet()
         }
     }
 
