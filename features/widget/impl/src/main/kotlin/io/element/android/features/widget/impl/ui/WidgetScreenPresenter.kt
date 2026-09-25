@@ -22,7 +22,6 @@ import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.features.widget.api.WidgetActivityData
-import io.element.android.features.widget.impl.permissions.WidgetOpenIdPermission
 import io.element.android.features.widget.impl.permissions.WidgetPermissionStore
 import io.element.android.features.widget.impl.utils.WidgetProvider
 import io.element.android.libraries.architecture.AsyncData
@@ -101,7 +100,6 @@ class WidgetScreenPresenter(
         var webViewError by remember { mutableStateOf<String?>(null) }
         var preloadPermission by remember { mutableStateOf<WidgetPreloadPermission>(WidgetPreloadPermission.Checking) }
         var pendingOpenIdRequest by remember { mutableStateOf<PendingOpenIdRequest?>(null) }
-        var sessionOpenIdPermission by remember { mutableStateOf(WidgetOpenIdPermission.Unknown) }
         val languageTag = languageTagProvider.provideLanguageTag()
         val theme = if (ElementTheme.isLightTheme) "light" else "dark"
         val widgetOrigin = remember(widgetActivityData.url) { widgetOrigin(widgetActivityData.url) }
@@ -162,31 +160,13 @@ class WidgetScreenPresenter(
 
                         val openIdRequest = parseOpenIdRequest(message)
                         if (openIdRequest != null) {
-                            val permission = widgetActivityData.eventId?.let { eventId ->
-                                widgetPermissionStore.getOpenIdPermission(
-                                    sessionId = widgetActivityData.sessionId,
-                                    roomId = widgetActivityData.roomId,
-                                    eventId = eventId,
-                                )
-                            } ?: sessionOpenIdPermission
-
-                            when (permission) {
-                                WidgetOpenIdPermission.Allowed -> {
-                                    widgetDriver.value?.send(message)
-                                }
-                                WidgetOpenIdPermission.Denied -> {
-                                    interceptor.sendMessage(openIdInitialResponse(message, OPEN_ID_BLOCKED))
-                                }
-                                WidgetOpenIdPermission.Unknown -> {
-                                    if (pendingOpenIdRequest == null) {
-                                        interceptor.sendMessage(openIdInitialResponse(message, OPEN_ID_REQUEST))
-                                        pendingOpenIdRequest = openIdRequest
-                                    } else {
-                                        // Only show one identity prompt at a time. Reject parallel requests instead
-                                        // of allowing a widget to stack dialogs.
-                                        interceptor.sendMessage(openIdInitialResponse(message, OPEN_ID_BLOCKED))
-                                    }
-                                }
+                            if (pendingOpenIdRequest == null) {
+                                interceptor.sendMessage(openIdInitialResponse(message, OPEN_ID_REQUEST))
+                                pendingOpenIdRequest = openIdRequest
+                            } else {
+                                // Only show one identity prompt at a time. Reject parallel requests instead
+                                // of allowing a widget to stack dialogs.
+                                interceptor.sendMessage(openIdInitialResponse(message, OPEN_ID_BLOCKED))
                             }
                             return@onEach
                         }
@@ -229,45 +209,21 @@ class WidgetScreenPresenter(
                 is WidgetScreenEvents.GrantOpenIdPermission -> {
                     val request = pendingOpenIdRequest ?: return
                     pendingOpenIdRequest = null
+                    suppressedOpenIdPendingRequestIds += request.requestId
                     coroutineScope.launch {
-                        val eventId = widgetActivityData.eventId
-                        if (eventId == null) {
-                            sessionOpenIdPermission = WidgetOpenIdPermission.Allowed
-                        } else {
-                            widgetPermissionStore.setOpenIdPermission(
-                                sessionId = widgetActivityData.sessionId,
-                                roomId = widgetActivityData.roomId,
-                                eventId = eventId,
-                                permission = WidgetOpenIdPermission.Allowed,
-                            )
-                        }
-                        suppressedOpenIdPendingRequestIds += request.requestId
                         widgetDriver.value?.send(request.rawMessage)
                     }
                 }
                 is WidgetScreenEvents.DenyOpenIdPermission -> {
                     val request = pendingOpenIdRequest ?: return
                     pendingOpenIdRequest = null
-                    coroutineScope.launch {
-                        val eventId = widgetActivityData.eventId
-                        if (eventId == null) {
-                            sessionOpenIdPermission = WidgetOpenIdPermission.Denied
-                        } else {
-                            widgetPermissionStore.setOpenIdPermission(
-                                sessionId = widgetActivityData.sessionId,
-                                roomId = widgetActivityData.roomId,
-                                eventId = eventId,
-                                permission = WidgetOpenIdPermission.Denied,
-                            )
-                        }
-                        messageInterceptor.value?.let { interceptor ->
-                            val (requestId, blockedMessage) = blockedOpenIdCredentialsMessage(
-                                widgetId = widgetActivityData.widgetId,
-                                originalRequestId = request.requestId,
-                            )
-                            syntheticOpenIdRequestIds += requestId
-                            interceptor.sendMessage(blockedMessage)
-                        }
+                    messageInterceptor.value?.let { interceptor ->
+                        val (requestId, blockedMessage) = blockedOpenIdCredentialsMessage(
+                            widgetId = widgetActivityData.widgetId,
+                            originalRequestId = request.requestId,
+                        )
+                        syntheticOpenIdRequestIds += requestId
+                        interceptor.sendMessage(blockedMessage)
                     }
                 }
                 is WidgetScreenEvents.Close -> {
