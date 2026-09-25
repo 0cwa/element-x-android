@@ -37,6 +37,7 @@ internal fun aWidgetScreenState(
     webViewError: String? = null,
     userAgent: String = "",
     isWidgetLoaded: Boolean = true,
+    isOpenIdPermissionRequired: Boolean = false,
     widgetName: String = "Widget",
     eventSink: (WidgetScreenEvents) -> Unit = {},
 ): WidgetScreenState {
@@ -47,6 +48,7 @@ internal fun aWidgetScreenState(
         webViewError = webViewError,
         userAgent = userAgent,
         isWidgetLoaded = isWidgetLoaded,
+        isOpenIdPermissionRequired = isOpenIdPermissionRequired,
         widgetName = widgetName,
         eventSink = eventSink,
     )
