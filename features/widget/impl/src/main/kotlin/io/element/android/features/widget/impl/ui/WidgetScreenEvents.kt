@@ -15,5 +15,6 @@ sealed interface WidgetScreenEvents {
     data object GrantOpenIdPermission : WidgetScreenEvents
     data object DenyOpenIdPermission : WidgetScreenEvents
     data class SetMessageInterceptor(val interceptor: WidgetMessageInterceptor?) : WidgetScreenEvents
+    data object OnWebViewLoaded : WidgetScreenEvents
     data class OnWebViewError(val description: String?) : WidgetScreenEvents
 }
