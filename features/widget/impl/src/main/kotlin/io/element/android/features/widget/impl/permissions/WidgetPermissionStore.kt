@@ -89,8 +89,16 @@ class WidgetPermissionStore(
         store.edit { preferences ->
             val allowed = preferences[allowedOpenIdWidgetsKey].orEmpty() - key
             val denied = preferences[deniedOpenIdWidgetsKey].orEmpty() - key
-            preferences[allowedOpenIdWidgetsKey] = if (permission == WidgetOpenIdPermission.Allowed) allowed + key else allowed
-            preferences[deniedOpenIdWidgetsKey] = if (permission == WidgetOpenIdPermission.Denied) denied + key else denied
+            preferences[allowedOpenIdWidgetsKey] = if (permission == WidgetOpenIdPermission.Allowed) {
+                allowed + key
+            } else {
+                allowed
+            }
+            preferences[deniedOpenIdWidgetsKey] = if (permission == WidgetOpenIdPermission.Denied) {
+                denied + key
+            } else {
+                denied
+            }
         }
     }
 
