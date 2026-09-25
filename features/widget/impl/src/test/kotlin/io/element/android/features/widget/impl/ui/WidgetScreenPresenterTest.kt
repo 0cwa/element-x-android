@@ -267,12 +267,36 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             runCurrent()
 
             assertThat(driver.sentMessages).containsExactly(request)
-            val duplicatePending = """{"api":"fromWidget","widgetId":"widget-id","requestId":"openid-1","action":"get_openid","data":{},"response":{"state":"request"}}"""
+            val duplicatePending = """
+                {
+                    "api":"fromWidget",
+                    "widgetId":"widget-id",
+                    "requestId":"openid-1",
+                    "action":"get_openid",
+                    "data":{},
+                    "response":{"state":"request"}
+                }
+            """.trimIndent()
             driver.givenIncomingMessage(duplicatePending)
             runCurrent()
             assertThat(interceptor.sentMessages).hasSize(1)
 
-            val credentials = """{"api":"toWidget","widgetId":"widget-id","requestId":"sdk-openid-1","action":"openid_credentials","data":{"state":"allowed","original_request_id":"openid-1","access_token":"secret-token","expires_in":3600,"matrix_server_name":"example.org","token_type":"Bearer"}}"""
+            val credentials = """
+                {
+                    "api":"toWidget",
+                    "widgetId":"widget-id",
+                    "requestId":"sdk-openid-1",
+                    "action":"openid_credentials",
+                    "data":{
+                        "state":"allowed",
+                        "original_request_id":"openid-1",
+                        "access_token":"secret-token",
+                        "expires_in":3600,
+                        "matrix_server_name":"example.org",
+                        "token_type":"Bearer"
+                    }
+                }
+            """.trimIndent()
             driver.givenIncomingMessage(credentials)
             runCurrent()
 
