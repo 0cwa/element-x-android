@@ -174,39 +174,56 @@ internal fun WidgetScreenView(
         }
     }
 
-    pendingPermissionRequest?.let { request ->
-        val permissionNames = mutableListOf<String>()
-        if (PermissionRequest.RESOURCE_AUDIO_CAPTURE in request.resources) {
-            permissionNames += stringResource(R.string.screen_widget_permission_request_microphone)
-        }
-        if (PermissionRequest.RESOURCE_VIDEO_CAPTURE in request.resources) {
-            permissionNames += stringResource(R.string.screen_widget_permission_request_camera)
-        }
-        val origin = widgetOrigin(request.origin.toString()) ?: request.origin.toString()
+    if (state.isOpenIdPermissionRequired) {
         ConfirmationDialog(
-            title = stringResource(R.string.screen_widget_permission_request_title),
+            title = stringResource(R.string.screen_widget_openid_permission_title),
             content = stringResource(
-                R.string.screen_widget_permission_request_content,
-                origin,
-                permissionNames.joinToString(", "),
+                R.string.screen_widget_openid_permission_content,
+                state.widgetOrigin ?: state.widgetName,
             ),
             submitText = stringResource(CommonStrings.action_continue),
             onSubmitClick = {
-                pendingPermissionRequest = null
-                val androidPermissions = mapWebkitPermissions(request.resources)
-                requestPermissions(androidPermissions.toTypedArray()) { resourcesToGrant ->
-                    if (resourcesToGrant.isEmpty()) {
-                        request.deny()
-                    } else {
-                        request.grant(resourcesToGrant)
-                    }
-                }
+                state.eventSink(WidgetScreenEvents.GrantOpenIdPermission)
             },
             onDismiss = {
-                pendingPermissionRequest = null
-                request.deny()
+                state.eventSink(WidgetScreenEvents.DenyOpenIdPermission)
             },
         )
+    } else {
+        pendingPermissionRequest?.let { request ->
+            val permissionNames = mutableListOf<String>()
+            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE in request.resources) {
+                permissionNames += stringResource(R.string.screen_widget_permission_request_microphone)
+            }
+            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE in request.resources) {
+                permissionNames += stringResource(R.string.screen_widget_permission_request_camera)
+            }
+            val origin = widgetOrigin(request.origin.toString()) ?: request.origin.toString()
+            ConfirmationDialog(
+                title = stringResource(R.string.screen_widget_permission_request_title),
+                content = stringResource(
+                    R.string.screen_widget_permission_request_content,
+                    origin,
+                    permissionNames.joinToString(", "),
+                ),
+                submitText = stringResource(CommonStrings.action_continue),
+                onSubmitClick = {
+                    pendingPermissionRequest = null
+                    val androidPermissions = mapWebkitPermissions(request.resources)
+                    requestPermissions(androidPermissions.toTypedArray()) { resourcesToGrant ->
+                        if (resourcesToGrant.isEmpty()) {
+                            request.deny()
+                        } else {
+                            request.grant(resourcesToGrant)
+                        }
+                    }
+                },
+                onDismiss = {
+                    pendingPermissionRequest = null
+                    request.deny()
+                },
+            )
+        }
     }
 }
 
