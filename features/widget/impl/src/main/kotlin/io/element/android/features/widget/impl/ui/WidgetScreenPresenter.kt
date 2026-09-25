@@ -37,6 +37,7 @@ import io.element.android.libraries.widget.WidgetMessageInterceptor
 import io.element.android.libraries.widget.WidgetMessageSerializer
 import io.element.android.libraries.widget.isAllowedWidgetNavigation
 import io.element.android.libraries.widget.widgetOrigin
+import io.element.android.libraries.widget.withWidgetApiBootstrapParameters
 import io.element.android.services.appnavstate.api.ActiveRoomsHolder
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.launchIn
@@ -333,7 +334,11 @@ class WidgetScreenPresenter(
             }
             widgetDriver.value = result.driver
             Timber.d("Widget driver initialized for widgetId: ${inputs.widgetId}")
-            result.url
+            withWidgetApiBootstrapParameters(
+                rawUrl = result.url,
+                widgetId = inputs.widgetId,
+                parentOrigin = expectedOrigin,
+            )
         }
     }
 
