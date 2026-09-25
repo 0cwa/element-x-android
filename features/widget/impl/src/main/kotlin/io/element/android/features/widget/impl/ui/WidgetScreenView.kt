@@ -143,7 +143,7 @@ internal fun WidgetScreenView(
                         val interceptor = WebViewWidgetMessageInterceptor(
                             webView = webView,
                             widgetOrigin = state.widgetOrigin,
-                            onUrlLoaded = {},
+                            onUrlLoaded = { state.eventSink(WidgetScreenEvents.OnWebViewLoaded) },
                             onError = { state.eventSink(WidgetScreenEvents.OnWebViewError(it)) },
                         )
                         if (interceptor.isMessageChannelAvailable) {
