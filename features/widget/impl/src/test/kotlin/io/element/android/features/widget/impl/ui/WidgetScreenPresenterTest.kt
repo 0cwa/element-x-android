@@ -14,6 +14,7 @@ import app.cash.molecule.RecompositionMode
 import app.cash.molecule.moleculeFlow
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.widget.api.WidgetActivityData
+import io.element.android.features.widget.impl.permissions.WidgetOpenIdPermission
 import io.element.android.features.widget.impl.permissions.WidgetPermissionStore
 import io.element.android.features.widget.impl.utils.WidgetProvider
 import io.element.android.libraries.androidutils.json.DefaultJsonProvider
@@ -38,6 +39,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.json.JSONObject
 import org.junit.Rule
 import org.junit.Test
 import kotlin.time.Duration.Companion.seconds
@@ -170,16 +172,17 @@ class WidgetScreenPresenterTest : RobolectricTest() {
     }
 
     @Test
-    fun `openid request and response are relayed unchanged`() = runTest {
+    fun `openid request waits for consent before reaching the SDK and approval resumes it`() = runTest {
         val driver = FakeMatrixWidgetDriver(id = "widget-id")
         val provider = FakeWidgetProvider(driver = driver)
+        val permissionStore = createPermissionStore()
         val presenter = createWidgetScreenPresenter(
             data = aWidgetActivityData(creatorUserId = A_SESSION_ID.value),
             widgetProvider = provider,
+            permissionStore = permissionStore,
         )
         val interceptor = FakeWidgetMessageInterceptor()
         val request = """{"api":"fromWidget","widgetId":"widget-id","requestId":"openid-1","action":"get_openid","data":{}}"""
-        val response = """{"api":"fromWidget","widgetId":"widget-id","requestId":"openid-1","action":"get_openid","data":{},"response":{"matrix_server_name":"example.org","access_token":"secret-token","expires_in":3600}}"""
 
         presenter.test {
             var state = awaitItem()
@@ -189,15 +192,87 @@ class WidgetScreenPresenterTest : RobolectricTest() {
 
             state.eventSink(WidgetScreenEvents.SetMessageInterceptor(interceptor))
             runCurrent()
-
             interceptor.givenInterceptedMessage(request)
             runCurrent()
-            assertThat(driver.sentMessages).containsExactly(request)
 
-            driver.givenIncomingMessage(response)
+            while (!state.isOpenIdPermissionRequired) {
+                state = awaitItem()
+            }
+            assertThat(driver.sentMessages).isEmpty()
+            assertThat(interceptor.sentMessages).hasSize(1)
+            assertThat(JSONObject(interceptor.sentMessages.single()).getJSONObject("response").getString("state"))
+                .isEqualTo("request")
+
+            state.eventSink(WidgetScreenEvents.GrantOpenIdPermission)
             runCurrent()
-            assertThat(interceptor.sentMessages).containsExactly(response)
 
+            assertThat(driver.sentMessages).containsExactly(request)
+            assertThat(permissionStore.getOpenIdPermission(A_SESSION_ID, A_ROOM_ID, "\$event-id"))
+                .isEqualTo(WidgetOpenIdPermission.Allowed)
+
+            val duplicatePending = """{"api":"fromWidget","widgetId":"widget-id","requestId":"openid-1","action":"get_openid","data":{},"response":{"state":"request"}}"""
+            driver.givenIncomingMessage(duplicatePending)
+            runCurrent()
+            assertThat(interceptor.sentMessages).hasSize(1)
+
+            val credentials = """{"api":"toWidget","widgetId":"widget-id","requestId":"sdk-openid-1","action":"openid_credentials","data":{"state":"allowed","original_request_id":"openid-1","access_token":"secret-token","expires_in":3600,"matrix_server_name":"example.org","token_type":"Bearer"}}"""
+            driver.givenIncomingMessage(credentials)
+            runCurrent()
+
+            assertThat(interceptor.sentMessages).containsExactly(
+                interceptor.sentMessages.first(),
+                credentials,
+            ).inOrder()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `denying openid consent blocks identity without sending the request to the SDK`() = runTest {
+        val driver = FakeMatrixWidgetDriver(id = "widget-id")
+        val provider = FakeWidgetProvider(driver = driver)
+        val permissionStore = createPermissionStore()
+        val presenter = createWidgetScreenPresenter(
+            data = aWidgetActivityData(creatorUserId = A_SESSION_ID.value),
+            widgetProvider = provider,
+            permissionStore = permissionStore,
+        )
+        val interceptor = FakeWidgetMessageInterceptor()
+        val request = """{"api":"fromWidget","widgetId":"widget-id","requestId":"openid-2","action":"get_openid","data":{}}"""
+
+        presenter.test {
+            var state = awaitItem()
+            while (state.urlState !is AsyncData.Success) {
+                state = awaitItem()
+            }
+
+            state.eventSink(WidgetScreenEvents.SetMessageInterceptor(interceptor))
+            runCurrent()
+            interceptor.givenInterceptedMessage(request)
+            runCurrent()
+
+            while (!state.isOpenIdPermissionRequired) {
+                state = awaitItem()
+            }
+            state.eventSink(WidgetScreenEvents.DenyOpenIdPermission)
+            runCurrent()
+
+            assertThat(driver.sentMessages).isEmpty()
+            assertThat(permissionStore.getOpenIdPermission(A_SESSION_ID, A_ROOM_ID, "\$event-id"))
+                .isEqualTo(WidgetOpenIdPermission.Denied)
+            assertThat(interceptor.sentMessages).hasSize(2)
+
+            val blocked = JSONObject(interceptor.sentMessages.last())
+            assertThat(blocked.getString("api")).isEqualTo("toWidget")
+            assertThat(blocked.getString("action")).isEqualTo("openid_credentials")
+            assertThat(blocked.getJSONObject("data").getString("state")).isEqualTo("blocked")
+            assertThat(blocked.getJSONObject("data").getString("original_request_id")).isEqualTo("openid-2")
+
+            blocked.put("response", JSONObject())
+            interceptor.givenInterceptedMessage(blocked.toString())
+            runCurrent()
+
+            assertThat(driver.sentMessages).isEmpty()
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -271,12 +346,8 @@ class WidgetScreenPresenterTest : RobolectricTest() {
         widgetProvider: FakeWidgetProvider,
         navigator: WidgetScreenNavigator = FakeWidgetScreenNavigator(),
         matrixClientProvider: FakeMatrixClientProvider = FakeMatrixClientProvider(),
+        permissionStore: WidgetPermissionStore = createPermissionStore(),
     ): WidgetScreenPresenter {
-        val permissionStore = WidgetPermissionStore(
-            context = ApplicationProvider.getApplicationContext<Context>(),
-            appCoroutineScope = backgroundScope,
-            sessionObserver = FakeSessionObserver(),
-        )
         return WidgetScreenPresenter(
             widgetActivityData = data,
             navigator = navigator,
@@ -292,6 +363,14 @@ class WidgetScreenPresenterTest : RobolectricTest() {
                 override fun provideLanguageTag(): String = "en-US"
             },
             widgetMessageSerializer = WidgetMessageSerializer(DefaultJsonProvider()),
+        )
+    }
+
+    private fun TestScope.createPermissionStore(): WidgetPermissionStore {
+        return WidgetPermissionStore(
+            context = ApplicationProvider.getApplicationContext<Context>(),
+            appCoroutineScope = backgroundScope,
+            sessionObserver = FakeSessionObserver(),
         )
     }
 
