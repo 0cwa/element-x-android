@@ -30,6 +30,9 @@ import timber.log.Timber
  *
  * [widgetOrigin] should be supplied for arbitrary third-party widgets so messages are accepted from,
  * and sent to, only that origin. A null value preserves the existing Element Call wildcard behavior.
+ *
+ * Third-party widget message payloads are never written to the JavaScript console. Responses can contain
+ * short-lived credentials such as Matrix OpenID tokens, so even debug builds must keep those payloads out of logs.
  */
 class WebViewWidgetMessageInterceptor(
     private val webView: WebView,
@@ -120,10 +123,10 @@ class WebViewWidgetMessageInterceptor(
                             if (message.data.response && message.data.api == "toWidget"
                                 || !message.data.response && message.data.api == "fromWidget") {
                                 let json = JSON.stringify(event.data) 
-                                ${"console.log('message sent: ' + json);".takeIf { BuildConfig.DEBUG }}
+                                ${"console.log('message sent: ' + json);".takeIf { BuildConfig.DEBUG && widgetOrigin == null }}
                                 $LISTENER_NAME.postMessage(json);
                             } else {
-                                ${"console.log('message received (ignored): ' + JSON.stringify(event.data));".takeIf { BuildConfig.DEBUG }}
+                                ${"console.log('message received (ignored): ' + JSON.stringify(event.data));".takeIf { BuildConfig.DEBUG && widgetOrigin == null }}
                             }
                         });
                     """.trimIndent(),
