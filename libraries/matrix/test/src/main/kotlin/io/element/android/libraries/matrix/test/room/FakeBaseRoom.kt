@@ -18,6 +18,8 @@ import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.room.RoomMember
 import io.element.android.libraries.matrix.api.room.RoomMembersState
+import io.element.android.libraries.matrix.api.room.RoomStateEventContent
+import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.draft.ComposerDraft
 import io.element.android.libraries.matrix.api.room.powerlevels.RoomPermissions
 import io.element.android.libraries.matrix.api.room.powerlevels.RoomPowerLevelsValues
@@ -65,6 +67,7 @@ class FakeBaseRoom(
     private val reportRoomResult: (String?) -> Result<Unit> = { lambdaError() },
     private val predecessorRoomResult: () -> PredecessorRoom? = { null },
     private val threadRootIdForEventResult: (EventId) -> Result<ThreadId?> = { lambdaError() },
+    private val getStateEventContentsResult: (StateEventType) -> Result<List<RoomStateEventContent>> = { lambdaError() },
 ) : BaseRoom {
     private val _roomInfoFlow: MutableStateFlow<RoomInfo> = MutableStateFlow(initialRoomInfo)
     override val roomInfoFlow: StateFlow<RoomInfo> = _roomInfoFlow
@@ -205,6 +208,10 @@ class FakeBaseRoom(
 
     override suspend fun threadRootIdForEvent(eventId: EventId): Result<ThreadId?> {
         return threadRootIdForEventResult(eventId)
+    }
+
+    override suspend fun getStateEventContents(eventType: StateEventType): Result<List<RoomStateEventContent>> {
+        return getStateEventContentsResult(eventType)
     }
 }
 
