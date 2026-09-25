@@ -97,7 +97,7 @@ class WidgetScreenPresenter(
         }
         var isWidgetLoaded by rememberSaveable { mutableStateOf(false) }
         var ignoreWebViewError by rememberSaveable { mutableStateOf(false) }
-        var isWebViewLoaded by rememberSaveable { mutableStateOf(false) }
+        var isWebViewLoaded by remember { mutableStateOf(false) }
         var webViewError by remember { mutableStateOf<String?>(null) }
         var preloadPermission by remember { mutableStateOf<WidgetPreloadPermission>(WidgetPreloadPermission.Checking) }
         var pendingOpenIdRequest by remember { mutableStateOf<PendingOpenIdRequest?>(null) }
