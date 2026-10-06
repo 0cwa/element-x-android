@@ -17,7 +17,7 @@ import io.element.android.features.call.api.CallData
 import io.element.android.features.call.impl.utils.FakeActiveCallManager
 import io.element.android.features.call.impl.utils.FakeCallWidgetProvider
 import io.element.android.features.call.impl.utils.FakeWidgetMessageInterceptor
-import io.element.android.features.call.impl.utils.WidgetMessageSerializer
+import io.element.android.libraries.widget.WidgetMessageSerializer
 import io.element.android.libraries.androidutils.json.DefaultJsonProvider
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.core.coroutine.CoroutineDispatchers
