@@ -122,6 +122,7 @@ fun RoomDetailsView(
     onProfileClick: (UserId) -> Unit,
     onReportRoomClick: () -> Unit,
     modifier: Modifier = Modifier,
+    openExtensions: (() -> Unit)? = null,
     additionalSections: @Composable ColumnScope.() -> Unit = {},
     leaveRoomView: @Composable () -> Unit,
 ) {
@@ -245,6 +246,9 @@ fun RoomDetailsView(
                 MediaGalleryItem(
                     onClick = openMediaGallery
                 )
+                openExtensions?.let {
+                    ExtensionsItem(onClick = it)
+                }
                 PinnedMessagesItem(
                     pinnedMessagesCount = state.pinnedMessagesCount,
                     onPinnedMessagesClick = onPinnedMessagesClick
@@ -823,6 +827,17 @@ private fun MediaGalleryItem(
     ListItem(
         content = { Text(stringResource(R.string.screen_room_details_media_gallery_title)) },
         leadingContent = ListItemContent.Icon(IconSource.Vector(CompoundIcons.Image())),
+        onClick = onClick,
+    )
+}
+
+@Composable
+private fun ExtensionsItem(
+    onClick: () -> Unit,
+) {
+    ListItem(
+        content = { Text(stringResource(R.string.screen_room_details_extensions_title)) },
+        leadingContent = ListItemContent.Icon(IconSource.Vector(CompoundIcons.Extensions())),
         onClick = onClick,
     )
 }

@@ -77,6 +77,9 @@ dependencies {
     implementation(variantOf(libs.jna) { artifactType("aar") })
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.collections.immutable)
+    implementation(libs.serialization.json)
+    implementation(platform(libs.network.okhttp.bom))
+    implementation(libs.network.okhttp)
 
     testCommonDependencies(libs)
     testImplementation(projects.features.enterprise.test)
@@ -85,6 +88,7 @@ dependencies {
     testImplementation(projects.libraries.previewutils)
     testImplementation(projects.libraries.sessionStorage.test)
     testImplementation(projects.libraries.workmanager.test)
+    testImplementation(libs.network.mockwebserver)
     testImplementation(projects.services.analytics.test)
     testImplementation(projects.services.toolbox.test)
 }

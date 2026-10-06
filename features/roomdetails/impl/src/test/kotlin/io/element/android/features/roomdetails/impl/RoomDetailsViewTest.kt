@@ -106,6 +106,17 @@ class RoomDetailsViewTest : RobolectricTest() {
 
     @Config(qualifiers = "h1024dp")
     @Test
+    fun `click on extensions invokes expected callback`() = runAndroidComposeUiTest {
+        ensureCalledOnce { callback ->
+            setRoomDetailView(
+                openExtensions = callback,
+            )
+            clickOn(R.string.screen_room_details_extensions_title)
+        }
+    }
+
+    @Config(qualifiers = "h1024dp")
+    @Test
     fun `click on notification invokes expected callback`() = runAndroidComposeUiTest {
         ensureCalledOnce { callback ->
             setRoomDetailView(
@@ -391,6 +402,7 @@ private fun AndroidComposeUiTest<ComponentActivity>.setRoomDetailView(
     onSecurityAndPrivacyClick: () -> Unit = EnsureNeverCalled(),
     onProfileClick: (UserId) -> Unit = EnsureNeverCalledWithParam(),
     onReportRoomClick: () -> Unit = EnsureNeverCalled(),
+    openExtensions: (() -> Unit)? = null,
     additionalSections: @Composable ColumnScope.() -> Unit = {},
 ) {
     setContent {
@@ -412,6 +424,7 @@ private fun AndroidComposeUiTest<ComponentActivity>.setRoomDetailView(
             onSecurityAndPrivacyClick = onSecurityAndPrivacyClick,
             onProfileClick = onProfileClick,
             onReportRoomClick = onReportRoomClick,
+            openExtensions = openExtensions,
             leaveRoomView = {},
             additionalSections = additionalSections,
         )
