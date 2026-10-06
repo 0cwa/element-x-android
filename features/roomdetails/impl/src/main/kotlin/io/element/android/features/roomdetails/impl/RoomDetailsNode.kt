@@ -24,6 +24,7 @@ import dev.zacsweers.metro.AssistedInject
 import im.vector.app.features.analytics.plan.MobileScreen
 import io.element.android.annotations.ContributesNode
 import io.element.android.features.leaveroom.api.LeaveRoomRenderer
+import io.element.android.features.roomdetails.api.RoomDetailsExtension
 import io.element.android.libraries.androidutils.system.startSharePlainTextIntent
 import io.element.android.libraries.architecture.appyx.launchMolecule
 import io.element.android.libraries.architecture.callback
@@ -48,6 +49,7 @@ class RoomDetailsNode(
     private val room: BaseRoom,
     private val analyticsService: AnalyticsService,
     private val leaveRoomRenderer: LeaveRoomRenderer,
+    private val roomDetailsExtension: RoomDetailsExtension,
     private val featureFlagService: FeatureFlagService,
 ) : Node(buildContext, plugins = plugins), RoomDetailsNavigator {
     interface Callback : Plugin {
@@ -59,7 +61,6 @@ class RoomDetailsNode(
         fun navigateToAvatarPreview(name: String, url: String)
         fun navigateToPollHistory()
         fun navigateToMediaGallery()
-        fun navigateToExtensions()
         fun navigateToAdminSettings()
         fun navigateToPinnedMessagesList()
         fun navigateToKnockRequestsList()
@@ -68,6 +69,7 @@ class RoomDetailsNode(
         fun navigateToRoomCall(callIntent: CallIntent)
         fun navigateToReportRoom()
         fun navigateToSelectNewOwnersWhenLeaving()
+        fun navigateToExtensions()
     }
 
     private val presenter = presenterFactory.create(this)
@@ -125,6 +127,8 @@ class RoomDetailsNode(
 
         RoomDetailsView(
             state = state,
+            additionalSections = { with(roomDetailsExtension) { Render(Modifier) } },
+            openExtensions = if (showExtensions) callback::navigateToExtensions else null,
             modifier = modifier,
             goBack = ::navigateUp,
             onActionClick = ::onActionClick,
@@ -135,7 +139,6 @@ class RoomDetailsNode(
             openAvatarPreview = callback::navigateToAvatarPreview,
             openPollHistory = callback::navigateToPollHistory,
             openMediaGallery = callback::navigateToMediaGallery,
-            openExtensions = if (showExtensions) callback::navigateToExtensions else null,
             openAdminSettings = callback::navigateToAdminSettings,
             onJoinCallClick = callback::navigateToRoomCall,
             onPinnedMessagesClick = callback::navigateToPinnedMessagesList,
