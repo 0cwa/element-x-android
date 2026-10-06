@@ -121,8 +121,8 @@ fun RoomDetailsView(
     onSecurityAndPrivacyClick: () -> Unit,
     onProfileClick: (UserId) -> Unit,
     onReportRoomClick: () -> Unit,
-    openExtensions: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    openExtensions: (() -> Unit)? = null,
     additionalSections: @Composable ColumnScope.() -> Unit = {},
     leaveRoomView: @Composable () -> Unit,
 ) {
