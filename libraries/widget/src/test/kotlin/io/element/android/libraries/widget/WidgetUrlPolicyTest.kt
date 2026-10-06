@@ -65,5 +65,4 @@ class WidgetUrlPolicyTest {
                 "?keep=1&widgetId=real-widget&parentUrl=https%3A%2F%2Fwidget.example"
         )
     }
-
 }
