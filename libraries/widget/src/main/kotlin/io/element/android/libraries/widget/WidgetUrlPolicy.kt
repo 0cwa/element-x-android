@@ -38,7 +38,6 @@ fun isAllowedWidgetNavigation(rawUrl: String, expectedOrigin: String): Boolean {
     return widgetOrigin(rawUrl) == expectedOrigin
 }
 
-
 /**
  * Adds the legacy Widget API bootstrap parameters expected by matrix-widget-api based widgets.
  *
