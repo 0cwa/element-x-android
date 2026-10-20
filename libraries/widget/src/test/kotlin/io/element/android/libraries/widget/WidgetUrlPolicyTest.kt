@@ -25,6 +25,8 @@ class WidgetUrlPolicyTest {
         assertThat(widgetOrigin("file:///tmp/widget.html")).isNull()
         assertThat(widgetOrigin("/relative/widget")).isNull()
         assertThat(widgetOrigin("https://user:pass@example.org/widget")).isNull()
+        assertThat(widgetOrigin("https://example.org:65536/widget")).isNull()
+        assertThat(widgetOrigin("https://example.org:-1/widget")).isNull()
     }
 
     @Test
@@ -35,5 +37,53 @@ class WidgetUrlPolicyTest {
         assertThat(isAllowedWidgetNavigation("https://evil.example/next", origin)).isFalse()
         assertThat(isAllowedWidgetNavigation("http://example.org/next", origin)).isFalse()
         assertThat(isAllowedWidgetNavigation("https://example.org:8443/next", origin)).isFalse()
+    }
+
+    @Test
+    fun `generic messages require the main frame and pinned origin`() {
+        val origin = "https://example.org"
+        assertThat(isAllowedWidgetMessageSource(origin, true, origin)).isTrue()
+        assertThat(isAllowedWidgetMessageSource("https://example.org:443", true, origin)).isTrue()
+        assertThat(isAllowedWidgetMessageSource(origin, false, origin)).isFalse()
+        assertThat(isAllowedWidgetMessageSource("https://other.example", true, origin)).isFalse()
+        assertThat(isAllowedWidgetMessageSource("http://example.org", true, origin)).isFalse()
+        assertThat(isAllowedWidgetMessageSource("https://example.org:8443", true, origin)).isFalse()
+        assertThat(isAllowedWidgetMessageSource("null", true, origin)).isFalse()
+    }
+
+    @Test
+    fun `trusted call messages retain wildcard compatibility`() {
+        assertThat(isAllowedWidgetMessageSource("https://call.example", true, null)).isTrue()
+        assertThat(isAllowedWidgetMessageSource("https://call.example", false, null)).isTrue()
+        assertThat(isAllowedWidgetMessageSource("null", false, null)).isTrue()
+    }
+
+    @Test
+    fun `widget api bootstrap parameters use the pinned origin and preserve fragments`() {
+        val url = withWidgetApiBootstrapParameters(
+            rawUrl = "https://widget.example/calendar?existing=value#/?matrix_room_id=%21room%3Aexample.org",
+            widgetId = "calendar/widget id",
+            parentOrigin = "https://widget.example",
+        )
+
+        assertThat(url).isEqualTo(
+            "https://widget.example/calendar" +
+                "?existing=value&widgetId=calendar%2Fwidget+id&parentUrl=https%3A%2F%2Fwidget.example" +
+                "#/?matrix_room_id=%21room%3Aexample.org"
+        )
+    }
+
+    @Test
+    fun `widget api bootstrap parameters replace values supplied by room state`() {
+        val url = withWidgetApiBootstrapParameters(
+            rawUrl = "https://widget.example/?widgetId=spoofed&parentUrl=https%3A%2F%2Fevil.example&keep=1",
+            widgetId = "real-widget",
+            parentOrigin = "https://widget.example",
+        )
+
+        assertThat(url).isEqualTo(
+            "https://widget.example/" +
+                "?keep=1&widgetId=real-widget&parentUrl=https%3A%2F%2Fwidget.example"
+        )
     }
 }
