@@ -495,6 +495,8 @@ class JoinedRustRoom(
                                 sendDelayedEvent = false,
                                 downloadFiles = false,
                                 rtcTransports = false,
+                                rtcLivekitGetToken = false,
+                                rtcLivekitDelegateDelayedLeave = false,
                             )
                         }
                     }
