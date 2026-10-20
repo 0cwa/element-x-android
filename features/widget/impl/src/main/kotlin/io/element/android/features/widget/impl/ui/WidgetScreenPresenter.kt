@@ -163,8 +163,10 @@ class WidgetScreenPresenter(
                             return@onEach
                         }
 
-                        val openIdRequest = parseOpenIdRequest(message)
-                        if (openIdRequest != null) {
+                        if (isOpenIdCommand(message)) {
+                            // The SDK treats fromWidget messages as requests even when they include a response field.
+                            // Invalid OpenID commands must not fall through to the unapproved SDK relay.
+                            val openIdRequest = parseOpenIdRequest(message) ?: return@onEach
                             if (pendingOpenIdRequest == null) {
                                 interceptor.sendMessage(openIdInitialResponse(message, OPEN_ID_REQUEST))
                                 pendingOpenIdRequest = openIdRequest
@@ -347,6 +349,13 @@ class WidgetScreenPresenter(
         return widgetMessageSerializer.deserialize(message).getOrNull()
     }
 
+    private fun isOpenIdCommand(message: String): Boolean {
+        return runCatchingExceptions {
+            val json = JSONObject(message)
+            json.optString("api") == "fromWidget" && json.optString("action") == "get_openid"
+        }.getOrDefault(false)
+    }
+
     private fun parseOpenIdRequest(message: String): PendingOpenIdRequest? {
         return runCatchingExceptions {
             val json = JSONObject(message)
@@ -354,7 +363,7 @@ class WidgetScreenPresenter(
             if (json.optString("widgetId") != widgetActivityData.widgetId) return@runCatchingExceptions null
             if (json.optString("action") != "get_openid") return@runCatchingExceptions null
             if (json.has("response")) return@runCatchingExceptions null
-            val requestId = json.optString("requestId").takeIf { it.isNotBlank() }
+            val requestId = (json.opt("requestId") as? String)?.takeIf { it.isNotBlank() }
                 ?: return@runCatchingExceptions null
             PendingOpenIdRequest(rawMessage = message, requestId = requestId)
         }.getOrNull()
