@@ -159,6 +159,7 @@ class JoinedRustRoom(
         inner = innerRoom.threadListService(),
         contentMapper = TimelineEventContentMapper(),
         roomCoroutineScope = roomCoroutineScope,
+        roomDispatcher = roomDispatcher,
     )
 
     override val syncUpdateFlow = flow {
@@ -482,7 +483,7 @@ class JoinedRustRoom(
                 widgetSettings = widgetSettings,
                 room = innerRoom,
                 widgetCapabilitiesProvider = object : WidgetCapabilitiesProvider {
-                    override fun acquireCapabilities(capabilities: WidgetCapabilities): WidgetCapabilities {
+                    override suspend fun acquireCapabilities(capabilities: WidgetCapabilities): WidgetCapabilities {
                         return when (capabilitiesPolicy) {
                             MatrixWidgetCapabilitiesPolicy.ElementCall ->
                                 getElementCallRequiredPermissions(sessionId.value, baseRoom.deviceId.value)
@@ -494,6 +495,8 @@ class JoinedRustRoom(
                                 sendDelayedEvent = false,
                                 downloadFiles = false,
                                 rtcTransports = false,
+                                rtcLivekitGetToken = false,
+                                rtcLivekitDelegateDelayedLeave = false,
                             )
                         }
                     }
