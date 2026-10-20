@@ -31,9 +31,13 @@ open class ExtensionsStatePreviewParam : PreviewParameterProvider<ExtensionsStat
 
 fun anExtensionsState(
     extensions: List<ExtensionItem> = emptyList(),
+    isLoading: Boolean = false,
+    hasLoadError: Boolean = false,
     eventSink: (ExtensionsEvents) -> Unit = {},
 ) = ExtensionsState(
     extensions = extensions.toImmutableList(),
+    isLoading = isLoading,
+    hasLoadError = hasLoadError,
     eventSink = eventSink,
 )
 

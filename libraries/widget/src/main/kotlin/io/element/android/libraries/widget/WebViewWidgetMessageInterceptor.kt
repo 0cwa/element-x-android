@@ -30,6 +30,9 @@ import timber.log.Timber
  *
  * [widgetOrigin] should be supplied for arbitrary third-party widgets so messages are accepted from,
  * and sent to, only that origin. A null value preserves the existing Element Call wildcard behavior.
+ *
+ * Third-party widget message payloads are never written to the JavaScript console. Responses can contain
+ * short-lived credentials such as Matrix OpenID tokens, so even debug builds must keep those payloads out of logs.
  */
 class WebViewWidgetMessageInterceptor(
     private val webView: WebView,
@@ -62,55 +65,59 @@ class WebViewWidgetMessageInterceptor(
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
 
-                // Due to https://github.com/element-hq/element-x-android/issues/4097
-                // we need to supply a logging implementation that correctly includes
-                // objects in log lines.
-                view.evaluateJavascript(
-                    """
-                        // Removing any parts that result in a circular structure. Circular structures crash JSON.stringify.
-                        function safeStringify(object) {
-                          const simpleObject = {};
-                          for (const prop in object) {
-                              if (!object.hasOwnProperty(prop)) {
-                                  continue;
+                // Element Call keeps its console shim for the existing object-logging workaround.
+                // Generic third-party widgets are not console-logged, so do not mutate their console API.
+                if (widgetOrigin == null) {
+                    // Due to https://github.com/element-hq/element-x-android/issues/4097
+                    // we need to supply a logging implementation that correctly includes
+                    // objects in log lines.
+                    view.evaluateJavascript(
+                        """
+                            // Removing any parts that result in a circular structure. Circular structures crash JSON.stringify.
+                            function safeStringify(object) {
+                              const simpleObject = {};
+                              for (const prop in object) {
+                                  if (!object.hasOwnProperty(prop)) {
+                                      continue;
+                                  }
+                                  if (typeof(object[prop]) == 'object') {
+                                      continue;
+                                  }
+                                  if (typeof(object[prop]) == 'function') {
+                                      continue;
+                                  }
+                                  simpleObject[prop] = object[prop];
                               }
-                              if (typeof(object[prop]) == 'object') {
-                                  continue;
+                              try {
+                                return JSON.stringify(simpleObject);
+                              } catch {
+                                return "{Failed to stringify object}";
                               }
-                              if (typeof(object[prop]) == 'function') {
-                                  continue;
-                              }
-                              simpleObject[prop] = object[prop];
-                          }
-                          try {
-                            return JSON.stringify(simpleObject);
-                          } catch {
-                            return "{Failed to stringify object}";
-                          }
-                        }
-
-                        function logFn(consoleLogFn, ...args) {
-                            consoleLogFn(
-                                args.map(
-                                    a => typeof a === "string" ? a : safeStringify(a)
-                                ).join(' ')
-                            );
-                        };
-                        globalThis.console.debug = logFn.bind(null, console.debug);
-                        globalThis.console.log = logFn.bind(null, console.log);
-                        globalThis.console.info = logFn.bind(null, console.info);
-                        globalThis.console.warn = logFn.bind(null, console.warn);
-                        globalThis.console.error = logFn.bind(null, console.error);
-                    """.trimIndent(),
-                    null
-                )
+                            }
+    
+                            function logFn(consoleLogFn, ...args) {
+                                consoleLogFn(
+                                    args.map(
+                                        a => typeof a === "string" ? a : safeStringify(a)
+                                    ).join(' ')
+                                );
+                            };
+                            globalThis.console.debug = logFn.bind(null, console.debug);
+                            globalThis.console.log = logFn.bind(null, console.log);
+                            globalThis.console.info = logFn.bind(null, console.info);
+                            globalThis.console.warn = logFn.bind(null, console.warn);
+                            globalThis.console.error = logFn.bind(null, console.error);
+                        """.trimIndent(),
+                        null
+                    )
+                }
 
                 // We inject this JS code when the page starts loading to attach a message listener to the window.
                 // This listener will receive both messages:
                 // - Widget API -> Element X (message.data.api == "fromWidget")
                 // - Element X -> Widget API (message.data.api == "toWidget"), we should ignore these
                 val originGuard = widgetOrigin
-                    ?.let { "if (event.origin !== ${JSONObject.quote(it)}) return;" }
+                    ?.let { "if (event.source !== window || event.origin !== ${JSONObject.quote(it)}) return;" }
                     .orEmpty()
                 view.evaluateJavascript(
                     """
@@ -120,10 +127,14 @@ class WebViewWidgetMessageInterceptor(
                             if (message.data.response && message.data.api == "toWidget"
                                 || !message.data.response && message.data.api == "fromWidget") {
                                 let json = JSON.stringify(event.data) 
-                                ${"console.log('message sent: ' + json);".takeIf { BuildConfig.DEBUG }}
+                                ${"console.log('message sent: ' + json);".takeIf {
+                                    BuildConfig.DEBUG && widgetOrigin == null
+                                }}
                                 $LISTENER_NAME.postMessage(json);
                             } else {
-                                ${"console.log('message received (ignored): ' + JSON.stringify(event.data));".takeIf { BuildConfig.DEBUG }}
+                                ${"console.log('message received (ignored): ' + JSON.stringify(event.data));".takeIf {
+                                    BuildConfig.DEBUG && widgetOrigin == null
+                                }}
                             }
                         });
                     """.trimIndent(),
@@ -233,8 +244,10 @@ class WebViewWidgetMessageInterceptor(
                 webView,
                 LISTENER_NAME,
                 setOf(widgetOrigin ?: "*"),
-                WebViewCompat.WebMessageListener { _, message, _, _, _ ->
-                    onMessageReceived(message.data)
+                WebViewCompat.WebMessageListener { _, message, sourceOrigin, isMainFrame, _ ->
+                    if (isAllowedWidgetMessageSource(sourceOrigin.toString(), isMainFrame, widgetOrigin)) {
+                        onMessageReceived(message.data)
+                    }
                 }
             )
         }

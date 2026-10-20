@@ -11,16 +11,20 @@
 package io.element.android.features.roomdetails.impl
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.AndroidComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
 import io.element.android.features.roomdetails.impl.members.aRoomMember
 import io.element.android.features.userprofile.shared.aUserProfileState
+import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.notification.CallIntent
 import io.element.android.libraries.matrix.api.room.RoomNotificationMode
@@ -41,6 +45,12 @@ import org.junit.Test
 import org.robolectric.annotation.Config
 
 class RoomDetailsViewTest : RobolectricTest() {
+    @Test
+    fun `extension section is rendered`() = runAndroidComposeUiTest {
+        setRoomDetailView(additionalSections = { Text("Extra section") })
+        onNodeWithText("Extra section").assertExists()
+    }
+
     @Test
     fun `click on back invokes expected callback`() = runAndroidComposeUiTest {
         ensureCalledOnce { callback ->
@@ -385,7 +395,6 @@ private fun AndroidComposeUiTest<ComponentActivity>.setRoomDetailView(
     openAvatarPreview: (name: String, url: String) -> Unit = EnsureNeverCalledWithTwoParams(),
     openPollHistory: () -> Unit = EnsureNeverCalled(),
     openMediaGallery: () -> Unit = EnsureNeverCalled(),
-    openExtensions: (() -> Unit)? = null,
     openAdminSettings: () -> Unit = EnsureNeverCalled(),
     onJoinCallClick: (CallIntent) -> Unit = EnsureNeverCalledWithParam(),
     onPinnedMessagesClick: () -> Unit = EnsureNeverCalled(),
@@ -393,6 +402,8 @@ private fun AndroidComposeUiTest<ComponentActivity>.setRoomDetailView(
     onSecurityAndPrivacyClick: () -> Unit = EnsureNeverCalled(),
     onProfileClick: (UserId) -> Unit = EnsureNeverCalledWithParam(),
     onReportRoomClick: () -> Unit = EnsureNeverCalled(),
+    openExtensions: (() -> Unit)? = null,
+    additionalSections: @Composable ColumnScope.() -> Unit = {},
 ) {
     setContent {
         RoomDetailsView(
@@ -406,7 +417,6 @@ private fun AndroidComposeUiTest<ComponentActivity>.setRoomDetailView(
             openAvatarPreview = openAvatarPreview,
             openPollHistory = openPollHistory,
             openMediaGallery = openMediaGallery,
-            openExtensions = openExtensions,
             openAdminSettings = openAdminSettings,
             onJoinCallClick = onJoinCallClick,
             onPinnedMessagesClick = onPinnedMessagesClick,
@@ -414,7 +424,9 @@ private fun AndroidComposeUiTest<ComponentActivity>.setRoomDetailView(
             onSecurityAndPrivacyClick = onSecurityAndPrivacyClick,
             onProfileClick = onProfileClick,
             onReportRoomClick = onReportRoomClick,
+            openExtensions = openExtensions,
             leaveRoomView = {},
+            additionalSections = additionalSections,
         )
     }
 }

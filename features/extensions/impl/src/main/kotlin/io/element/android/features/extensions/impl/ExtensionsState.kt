@@ -11,5 +11,7 @@ import kotlinx.collections.immutable.ImmutableList
 
 data class ExtensionsState(
     val extensions: ImmutableList<ExtensionItem>,
+    val isLoading: Boolean,
+    val hasLoadError: Boolean,
     val eventSink: (ExtensionsEvents) -> Unit,
 )

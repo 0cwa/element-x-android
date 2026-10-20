@@ -108,6 +108,56 @@ class ExtensionsPresenterTest : RobolectricTest() {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
+    fun `successful empty discovery is not treated as an error`() = runTest {
+        val presenter = ExtensionsPresenter(
+            room = FakeJoinedRoom(),
+            roomStateEventProvider = FakeRoomStateEventProvider(emptyList()),
+            widgetEntryPoint = RecordingWidgetEntryPoint(),
+        )
+        var latestState: ExtensionsState? = null
+
+        val job = launch {
+            moleculeFlow(RecompositionMode.Immediate) {
+                presenter.present()
+            }.collect { latestState = it }
+        }
+
+        runCurrent()
+
+        val state = checkNotNull(latestState)
+        assertThat(state.isLoading).isFalse()
+        assertThat(state.hasLoadError).isFalse()
+        assertThat(state.extensions).isEmpty()
+        job.cancelAndJoin()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `initial discovery failure is surfaced instead of looking empty`() = runTest {
+        val presenter = ExtensionsPresenter(
+            room = FakeJoinedRoom(),
+            roomStateEventProvider = FailingRoomStateEventProvider(),
+            widgetEntryPoint = RecordingWidgetEntryPoint(),
+        )
+        var latestState: ExtensionsState? = null
+
+        val job = launch {
+            moleculeFlow(RecompositionMode.Immediate) {
+                presenter.present()
+            }.collect { latestState = it }
+        }
+
+        runCurrent()
+
+        val state = checkNotNull(latestState)
+        assertThat(state.isLoading).isFalse()
+        assertThat(state.hasLoadError).isTrue()
+        assertThat(state.extensions).isEmpty()
+        job.cancelAndJoin()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
     fun `present refreshes extensions on room sync updates`() = runTest {
         val room = FakeJoinedRoom()
         val provider = FakeRoomStateEventProvider(
@@ -192,6 +242,14 @@ class ExtensionsPresenterTest : RobolectricTest() {
             callCount++
             return Result.success(events)
         }
+    }
+
+    private class FailingRoomStateEventProvider : RoomStateEventProvider {
+        override suspend fun getStateEvents(
+            sessionId: SessionId,
+            roomId: RoomId,
+            eventType: String,
+        ): Result<List<RoomStateEvent>> = Result.failure(IllegalStateException("boom"))
     }
 
     private class RecordingWidgetEntryPoint : WidgetEntryPoint {

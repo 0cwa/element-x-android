@@ -11,7 +11,9 @@ package io.element.android.libraries.featureflag.impl
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.element.android.libraries.core.meta.BuildMeta
+import io.element.android.libraries.core.meta.BuildType
 import io.element.android.libraries.featureflag.api.Feature
+import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.api.FeaturesProvider
 import io.element.android.libraries.featureflag.test.FakeFeature
 import io.element.android.libraries.matrix.test.core.aBuildMeta
@@ -46,6 +48,23 @@ class DefaultFeatureFlagServiceTest {
             assertThat(awaitItem()).isTrue()
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `room extensions default on in debug builds and off in release builds`() = runTest {
+        createDefaultFeatureFlagService(buildMeta = aBuildMeta(buildType = BuildType.DEBUG))
+            .isFeatureEnabledFlow(FeatureFlags.Extensions)
+            .test {
+                assertThat(awaitItem()).isTrue()
+                cancelAndIgnoreRemainingEvents()
+            }
+
+        createDefaultFeatureFlagService(buildMeta = aBuildMeta(buildType = BuildType.RELEASE))
+            .isFeatureEnabledFlow(FeatureFlags.Extensions)
+            .test {
+                assertThat(awaitItem()).isFalse()
+                cancelAndIgnoreRemainingEvents()
+            }
     }
 
     @Test

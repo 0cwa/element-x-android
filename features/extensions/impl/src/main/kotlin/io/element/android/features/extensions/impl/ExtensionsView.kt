@@ -16,11 +16,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewParameter
+import io.element.android.libraries.designsystem.components.ProgressDialog
 import io.element.android.libraries.designsystem.components.button.BackButton
+import io.element.android.libraries.designsystem.components.dialogs.ErrorDialog
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Scaffold
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
+import io.element.android.libraries.ui.strings.CommonStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,35 +43,47 @@ fun ExtensionsView(
             )
         },
     ) { padding ->
-        if (state.extensions.isEmpty()) {
-            ExtensionsEmptyState(
-                modifier = Modifier
-                    .padding(padding)
-                    .consumeWindowInsets(padding),
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .padding(padding)
-                    .consumeWindowInsets(padding)
-            ) {
-                items(
-                    items = state.extensions,
-                    key = { extension -> extension.widgetId },
-                ) { extension ->
-                    val displayName = extension.name ?: stringResource(R.string.screen_extensions_unknown_widget_name)
-                    ExtensionListItem(
-                        extension = extension,
-                        name = displayName,
-                        onClick = {
-                            state.eventSink(
-                                ExtensionsEvents.OnExtensionClicked(
-                                    extension = extension,
-                                    widgetName = displayName,
+        when {
+            state.isLoading -> {
+                ProgressDialog(text = stringResource(CommonStrings.common_please_wait))
+            }
+            state.hasLoadError -> {
+                ErrorDialog(
+                    content = stringResource(CommonStrings.error_unknown),
+                    onSubmit = goBack,
+                )
+            }
+            state.extensions.isEmpty() -> {
+                ExtensionsEmptyState(
+                    modifier = Modifier
+                        .padding(padding)
+                        .consumeWindowInsets(padding),
+                )
+            }
+            else -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .padding(padding)
+                        .consumeWindowInsets(padding)
+                ) {
+                    items(
+                        items = state.extensions,
+                        key = { extension -> extension.widgetId },
+                    ) { extension ->
+                        val displayName = extension.name ?: stringResource(R.string.screen_extensions_unknown_widget_name)
+                        ExtensionListItem(
+                            extension = extension,
+                            name = displayName,
+                            onClick = {
+                                state.eventSink(
+                                    ExtensionsEvents.OnExtensionClicked(
+                                        extension = extension,
+                                        widgetName = displayName,
+                                    )
                                 )
-                            )
-                        },
-                    )
+                            },
+                        )
+                    }
                 }
             }
         }
