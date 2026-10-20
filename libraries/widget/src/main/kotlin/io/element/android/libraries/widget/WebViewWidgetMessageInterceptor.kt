@@ -65,8 +65,8 @@ class WebViewWidgetMessageInterceptor(
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
 
-                // Element Call keeps its console shim for the existing object-logging workaround.
-                // Generic third-party widgets are not console-logged, so do not mutate their console API.
+                // Generic widgets install their relay at document start, not in this asynchronous callback.
+                // Element Call retains its existing console shim and legacy injection path.
                 if (widgetOrigin == null) {
                     // Due to https://github.com/element-hq/element-x-android/issues/4097
                     // we need to supply a logging implementation that correctly includes
@@ -110,36 +110,24 @@ class WebViewWidgetMessageInterceptor(
                         """.trimIndent(),
                         null
                     )
-                }
 
-                // We inject this JS code when the page starts loading to attach a message listener to the window.
-                // This listener will receive both messages:
-                // - Widget API -> Element X (message.data.api == "fromWidget")
-                // - Element X -> Widget API (message.data.api == "toWidget"), we should ignore these
-                val originGuard = widgetOrigin
-                    ?.let { "if (event.source !== window || event.origin !== ${JSONObject.quote(it)}) return;" }
-                    .orEmpty()
-                view.evaluateJavascript(
-                    """
-                        window.addEventListener('message', function(event) {
-                            $originGuard
-                            let message = {data: event.data, origin: event.origin}
-                            if (message.data.response && message.data.api == "toWidget"
-                                || !message.data.response && message.data.api == "fromWidget") {
-                                let json = JSON.stringify(event.data) 
-                                ${"console.log('message sent: ' + json);".takeIf {
-                                    BuildConfig.DEBUG && widgetOrigin == null
-                                }}
-                                $LISTENER_NAME.postMessage(json);
-                            } else {
-                                ${"console.log('message received (ignored): ' + JSON.stringify(event.data));".takeIf {
-                                    BuildConfig.DEBUG && widgetOrigin == null
-                                }}
-                            }
-                        });
-                    """.trimIndent(),
-                    null
-                )
+                    view.evaluateJavascript(
+                        """
+                            window.addEventListener('message', function(event) {
+                                let message = {data: event.data, origin: event.origin}
+                                if (message.data.response && message.data.api == "toWidget"
+                                    || !message.data.response && message.data.api == "fromWidget") {
+                                    let json = JSON.stringify(event.data)
+                                    ${"console.log('message sent: ' + json);".takeIf { BuildConfig.DEBUG }}
+                                    $LISTENER_NAME.postMessage(json);
+                                } else {
+                                    ${"console.log('message received (ignored): ' + JSON.stringify(event.data));".takeIf { BuildConfig.DEBUG }}
+                                }
+                            });
+                        """.trimIndent(),
+                        null
+                    )
+                }
             }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -233,8 +221,9 @@ class WebViewWidgetMessageInterceptor(
 
         val supportsOriginAwareMessaging = webViewVersionCode >= 119 &&
             WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
+        val supportsDocumentStartScript = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
 
-        isMessageChannelAvailable = widgetOrigin == null || supportsOriginAwareMessaging
+        isMessageChannelAvailable = widgetOrigin == null || supportsOriginAwareMessaging && supportsDocumentStartScript
         if (!isMessageChannelAvailable) {
             onError("This WebView version does not support secure widget messaging")
         }
@@ -250,6 +239,12 @@ class WebViewWidgetMessageInterceptor(
                     }
                 }
             )
+        }
+
+        if (widgetOrigin != null && supportsOriginAwareMessaging && supportsDocumentStartScript) {
+            // WebView injects the native listener before this script, and this script before page JS.
+            // onPageStarted/evaluateJavascript can race the widget's initial content_loaded request.
+            WebViewCompat.addDocumentStartJavaScript(webView, widgetMessageBridgeScript(widgetOrigin), setOf(widgetOrigin))
         }
     }
 
