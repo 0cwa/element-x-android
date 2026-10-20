@@ -25,6 +25,8 @@ class WidgetUrlPolicyTest {
         assertThat(widgetOrigin("file:///tmp/widget.html")).isNull()
         assertThat(widgetOrigin("/relative/widget")).isNull()
         assertThat(widgetOrigin("https://user:pass@example.org/widget")).isNull()
+        assertThat(widgetOrigin("https://example.org:65536/widget")).isNull()
+        assertThat(widgetOrigin("https://example.org:-1/widget")).isNull()
     }
 
     @Test
@@ -35,6 +37,25 @@ class WidgetUrlPolicyTest {
         assertThat(isAllowedWidgetNavigation("https://evil.example/next", origin)).isFalse()
         assertThat(isAllowedWidgetNavigation("http://example.org/next", origin)).isFalse()
         assertThat(isAllowedWidgetNavigation("https://example.org:8443/next", origin)).isFalse()
+    }
+
+    @Test
+    fun `generic messages require the main frame and pinned origin`() {
+        val origin = "https://example.org"
+        assertThat(isAllowedWidgetMessageSource(origin, true, origin)).isTrue()
+        assertThat(isAllowedWidgetMessageSource("https://example.org:443", true, origin)).isTrue()
+        assertThat(isAllowedWidgetMessageSource(origin, false, origin)).isFalse()
+        assertThat(isAllowedWidgetMessageSource("https://other.example", true, origin)).isFalse()
+        assertThat(isAllowedWidgetMessageSource("http://example.org", true, origin)).isFalse()
+        assertThat(isAllowedWidgetMessageSource("https://example.org:8443", true, origin)).isFalse()
+        assertThat(isAllowedWidgetMessageSource("null", true, origin)).isFalse()
+    }
+
+    @Test
+    fun `trusted call messages retain wildcard compatibility`() {
+        assertThat(isAllowedWidgetMessageSource("https://call.example", true, null)).isTrue()
+        assertThat(isAllowedWidgetMessageSource("https://call.example", false, null)).isTrue()
+        assertThat(isAllowedWidgetMessageSource("null", false, null)).isTrue()
     }
 
     @Test

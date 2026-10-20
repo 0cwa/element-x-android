@@ -117,7 +117,7 @@ class WebViewWidgetMessageInterceptor(
                 // - Widget API -> Element X (message.data.api == "fromWidget")
                 // - Element X -> Widget API (message.data.api == "toWidget"), we should ignore these
                 val originGuard = widgetOrigin
-                    ?.let { "if (event.origin !== ${JSONObject.quote(it)}) return;" }
+                    ?.let { "if (event.source !== window || event.origin !== ${JSONObject.quote(it)}) return;" }
                     .orEmpty()
                 view.evaluateJavascript(
                     """
@@ -244,8 +244,10 @@ class WebViewWidgetMessageInterceptor(
                 webView,
                 LISTENER_NAME,
                 setOf(widgetOrigin ?: "*"),
-                WebViewCompat.WebMessageListener { _, message, _, _, _ ->
-                    onMessageReceived(message.data)
+                WebViewCompat.WebMessageListener { _, message, sourceOrigin, isMainFrame, _ ->
+                    if (isAllowedWidgetMessageSource(sourceOrigin.toString(), isMainFrame, widgetOrigin)) {
+                        onMessageReceived(message.data)
+                    }
                 }
             )
         }
