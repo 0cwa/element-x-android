@@ -14,15 +14,18 @@ enum class MatrixWidgetCapabilitiesPolicy {
     /**
      * Restrict capabilities to the set required by Element Call.
      *
-     * This is the safe default used by existing call flows.
+     * This is the default used by existing trusted call flows, not by generic widgets.
      */
     ElementCall,
 
     /**
      * Deny every capability requested by the widget.
      *
-     * This is suitable for generic widgets until the SDK exposes asynchronous capability acquisition,
-     * which is required to implement an interactive permission prompt safely.
+     * Generic widgets use this policy until an interactive capability permission flow is implemented.
+     * The SDK's suspending callback alone does not imply user approval.
+     *
+     * This only denies negotiated Matrix capabilities. The SDK handles core Widget API requests such
+     * as `get_openid` separately; the generic host must obtain identity consent before forwarding them.
      */
     DenyAll,
 }

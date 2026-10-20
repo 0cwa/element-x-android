@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
+import com.bumble.appyx.core.children.nodeOrNull
 import com.bumble.appyx.core.lifecycle.subscribe
 import com.bumble.appyx.core.modality.BuildContext
 import com.bumble.appyx.core.node.Node
@@ -45,6 +46,7 @@ import io.element.android.features.messages.impl.report.ReportMessageNode
 import io.element.android.features.messages.impl.threads.ThreadedMessagesNode
 import io.element.android.features.messages.impl.threads.list.ThreadsListNode
 import io.element.android.features.messages.impl.timeline.TimelineController
+import io.element.android.features.messages.impl.timeline.TimelineSelectionOwner
 import io.element.android.features.messages.impl.timeline.debug.EventDebugInfoNode
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
 import io.element.android.features.messages.impl.timeline.model.event.GalleryItem
@@ -181,7 +183,7 @@ class MessagesFlowNode(
 
         @Parcelize
         data class ForwardEvent(
-            val eventId: EventId,
+            val eventIds: List<EventId>,
             @IgnoredOnParcel
             val timelineProvider: TimelineProvider? = null,
         ) : NavTarget
@@ -306,8 +308,8 @@ class MessagesFlowNode(
                         backstack.push(NavTarget.EventDebugInfo(eventId, debugInfo))
                     }
 
-                    override fun forwardEvent(eventId: EventId, timelineProvider: TimelineProvider) {
-                        backstack.push(NavTarget.ForwardEvent(eventId, timelineProvider))
+                    override fun forwardEvents(eventIds: List<EventId>, timelineProvider: TimelineProvider) {
+                        backstack.push(NavTarget.ForwardEvent(eventIds, timelineProvider))
                     }
 
                     override fun navigateToReportMessage(eventId: EventId, senderId: UserId) {
@@ -464,9 +466,17 @@ class MessagesFlowNode(
             is NavTarget.ForwardEvent -> {
                 // If no timeline provider is received, assume the live timeline should be used
                 val timelineProvider = navTarget.timelineProvider ?: timelineController
-                val params = ForwardEntryPoint.Params(navTarget.eventId, timelineProvider)
+                val params = ForwardEntryPoint.Params(
+                    eventIds = navTarget.eventIds,
+                    timelineProvider = timelineProvider,
+                    fromRoomId = room.roomId,
+                )
                 val callback = object : ForwardEntryPoint.Callback {
                     override fun onDone(roomIds: List<RoomId>) {
+                        // Exit selection mode only if forwarding actually happened.
+                        if (roomIds.isNotEmpty()) {
+                            exitSelectionMode()
+                        }
                         backstack.pop()
                         roomIds.singleOrNull()?.let { roomId ->
                             callback.navigateToRoom(roomId)
@@ -551,7 +561,7 @@ class MessagesFlowNode(
                     }
 
                     override fun handleForwardEventClick(eventId: EventId, timelineProvider: TimelineProvider) {
-                        backstack.push(NavTarget.ForwardEvent(eventId = eventId, timelineProvider = timelineProvider))
+                        backstack.push(NavTarget.ForwardEvent(eventIds = listOf(eventId), timelineProvider = timelineProvider))
                     }
 
                     override fun navigateToThread(threadRootId: ThreadId) {
@@ -617,8 +627,8 @@ class MessagesFlowNode(
                         backstack.push(NavTarget.EventDebugInfo(eventId, debugInfo))
                     }
 
-                    override fun handleForwardEventClick(eventId: EventId, timelineProvider: TimelineProvider) {
-                        backstack.push(NavTarget.ForwardEvent(eventId, timelineProvider))
+                    override fun handleForwardEventClick(eventIds: List<EventId>, timelineProvider: TimelineProvider) {
+                        backstack.push(NavTarget.ForwardEvent(eventIds, timelineProvider))
                     }
 
                     override fun navigateToReportMessage(eventId: EventId, senderId: UserId) {
@@ -776,7 +786,7 @@ class MessagesFlowNode(
                             assetType = event.content.assetType,
                         )
                     }
-                    NavTarget.LocationViewer(mode = mode).takeIf { locationService.isServiceAvailable() }
+                    NavTarget.LocationViewer(mode = mode).takeIf { locationService.isServiceAvailable().value }
                 } else {
                     displayVulkanNotSupportedError = true
                     null
@@ -937,6 +947,14 @@ class MessagesFlowNode(
         delay(10.milliseconds)
         // Then push the new threads screen on top
         backstack.push(NavTarget.Thread(threadId, focusedEventId))
+    }
+
+    private fun exitSelectionMode() {
+        val prevKey = backstack.elements.value
+            .lastOrNull { it.targetState == BackStack.State.STASHED }
+            ?.key
+        val timelineSelectionOwner = children.value[prevKey]?.nodeOrNull as? TimelineSelectionOwner
+        timelineSelectionOwner?.exitTimelineSelection()
     }
 
     @Composable
