@@ -30,6 +30,9 @@ import timber.log.Timber
  *
  * [widgetOrigin] should be supplied for arbitrary third-party widgets so messages are accepted from,
  * and sent to, only that origin. A null value preserves the existing Element Call wildcard behavior.
+ *
+ * Third-party widget message payloads are never written to the JavaScript console. Responses can contain
+ * short-lived credentials such as Matrix OpenID tokens, so even debug builds must keep those payloads out of logs.
  */
 class WebViewWidgetMessageInterceptor(
     private val webView: WebView,
@@ -47,64 +50,74 @@ class WebViewWidgetMessageInterceptor(
     // It's important to have extra capacity here to make sure we don't drop any messages
     override val interceptedMessages = MutableSharedFlow<String>(extraBufferCapacity = 10)
 
+    val isMessageChannelAvailable: Boolean
+
     init {
-        val assetLoader = WebViewAssetLoader.Builder()
-            .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(webView.context))
-            .build()
+        val assetLoader = if (widgetOrigin == null) {
+            WebViewAssetLoader.Builder()
+                .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(webView.context))
+                .build()
+        } else {
+            null
+        }
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
 
-                // Due to https://github.com/element-hq/element-x-android/issues/4097
-                // we need to supply a logging implementation that correctly includes
-                // objects in log lines.
-                view.evaluateJavascript(
-                    """
-                        // Removing any parts that result in a circular structure. Circular structures crash JSON.stringify.
-                        function safeStringify(object) {
-                          const simpleObject = {};
-                          for (const prop in object) {
-                              if (!object.hasOwnProperty(prop)) {
-                                  continue;
+                // Element Call keeps its console shim for the existing object-logging workaround.
+                // Generic third-party widgets are not console-logged, so do not mutate their console API.
+                if (widgetOrigin == null) {
+                    // Due to https://github.com/element-hq/element-x-android/issues/4097
+                    // we need to supply a logging implementation that correctly includes
+                    // objects in log lines.
+                    view.evaluateJavascript(
+                        """
+                            // Removing any parts that result in a circular structure. Circular structures crash JSON.stringify.
+                            function safeStringify(object) {
+                              const simpleObject = {};
+                              for (const prop in object) {
+                                  if (!object.hasOwnProperty(prop)) {
+                                      continue;
+                                  }
+                                  if (typeof(object[prop]) == 'object') {
+                                      continue;
+                                  }
+                                  if (typeof(object[prop]) == 'function') {
+                                      continue;
+                                  }
+                                  simpleObject[prop] = object[prop];
                               }
-                              if (typeof(object[prop]) == 'object') {
-                                  continue;
+                              try {
+                                return JSON.stringify(simpleObject);
+                              } catch {
+                                return "{Failed to stringify object}";
                               }
-                              if (typeof(object[prop]) == 'function') {
-                                  continue;
-                              }
-                              simpleObject[prop] = object[prop];
-                          }
-                          try {
-                            return JSON.stringify(simpleObject);
-                          } catch {
-                            return "{Failed to stringify object}";
-                          }
-                        }
-
-                        function logFn(consoleLogFn, ...args) {
-                            consoleLogFn(
-                                args.map(
-                                    a => typeof a === "string" ? a : safeStringify(a)
-                                ).join(' ')
-                            );
-                        };
-                        globalThis.console.debug = logFn.bind(null, console.debug);
-                        globalThis.console.log = logFn.bind(null, console.log);
-                        globalThis.console.info = logFn.bind(null, console.info);
-                        globalThis.console.warn = logFn.bind(null, console.warn);
-                        globalThis.console.error = logFn.bind(null, console.error);
-                    """.trimIndent(),
-                    null
-                )
+                            }
+    
+                            function logFn(consoleLogFn, ...args) {
+                                consoleLogFn(
+                                    args.map(
+                                        a => typeof a === "string" ? a : safeStringify(a)
+                                    ).join(' ')
+                                );
+                            };
+                            globalThis.console.debug = logFn.bind(null, console.debug);
+                            globalThis.console.log = logFn.bind(null, console.log);
+                            globalThis.console.info = logFn.bind(null, console.info);
+                            globalThis.console.warn = logFn.bind(null, console.warn);
+                            globalThis.console.error = logFn.bind(null, console.error);
+                        """.trimIndent(),
+                        null
+                    )
+                }
 
                 // We inject this JS code when the page starts loading to attach a message listener to the window.
                 // This listener will receive both messages:
                 // - Widget API -> Element X (message.data.api == "fromWidget")
                 // - Element X -> Widget API (message.data.api == "toWidget"), we should ignore these
                 val originGuard = widgetOrigin
-                    ?.let { "if (event.origin !== ${JSONObject.quote(it)}) return;" }
+                    ?.let { "if (event.source !== window || event.origin !== ${JSONObject.quote(it)}) return;" }
                     .orEmpty()
                 view.evaluateJavascript(
                     """
@@ -114,15 +127,40 @@ class WebViewWidgetMessageInterceptor(
                             if (message.data.response && message.data.api == "toWidget"
                                 || !message.data.response && message.data.api == "fromWidget") {
                                 let json = JSON.stringify(event.data) 
-                                ${"console.log('message sent: ' + json);".takeIf { BuildConfig.DEBUG }}
+                                ${"console.log('message sent: ' + json);".takeIf {
+                                    BuildConfig.DEBUG && widgetOrigin == null
+                                }}
                                 $LISTENER_NAME.postMessage(json);
                             } else {
-                                ${"console.log('message received (ignored): ' + JSON.stringify(event.data));".takeIf { BuildConfig.DEBUG }}
+                                ${"console.log('message received (ignored): ' + JSON.stringify(event.data));".takeIf {
+                                    BuildConfig.DEBUG && widgetOrigin == null
+                                }}
                             }
                         });
                     """.trimIndent(),
                     null
                 )
+            }
+
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                if (widgetOrigin != null && request.isForMainFrame &&
+                    !isAllowedWidgetNavigation(request.url.toString(), widgetOrigin)
+                ) {
+                    Timber.w("Blocked widget navigation outside expected origin")
+                    onError("Blocked navigation outside the widget origin")
+                    return true
+                }
+                return false
+            }
+
+            @Suppress("OVERRIDE_DEPRECATION")
+            override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+                if (widgetOrigin != null && !isAllowedWidgetNavigation(url, widgetOrigin)) {
+                    Timber.w("Blocked widget navigation outside expected origin")
+                    onError("Blocked navigation outside the widget origin")
+                    return true
+                }
+                return false
             }
 
             override fun onPageFinished(view: WebView, url: String) {
@@ -164,17 +202,18 @@ class WebViewWidgetMessageInterceptor(
             }
 
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest): WebResourceResponse? {
-                return assetLoader.shouldInterceptRequest(request.url)
+                return assetLoader?.shouldInterceptRequest(request.url)
             }
 
             @Suppress("OVERRIDE_DEPRECATION")
             override fun shouldInterceptRequest(view: WebView?, url: String): WebResourceResponse? {
-                return assetLoader.shouldInterceptRequest(url.toUri())
+                return assetLoader?.shouldInterceptRequest(url.toUri())
             }
         }
 
         // The JavascriptInterface fallback has no origin information, so it is only safe for the
-        // trusted Element Call flow. Third-party widgets must use the origin-aware listener below.
+        // trusted Element Call flow. Generic third-party widgets rely on the origin-aware
+        // WebMessageListener below.
         if (widgetOrigin == null) {
             webView.addJavascriptInterface(object {
                 @JavascriptInterface
@@ -195,7 +234,8 @@ class WebViewWidgetMessageInterceptor(
         val supportsOriginAwareMessaging = webViewVersionCode >= 119 &&
             WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
 
-        if (widgetOrigin != null && !supportsOriginAwareMessaging) {
+        isMessageChannelAvailable = widgetOrigin == null || supportsOriginAwareMessaging
+        if (!isMessageChannelAvailable) {
             onError("This WebView version does not support secure widget messaging")
         }
 
@@ -204,8 +244,10 @@ class WebViewWidgetMessageInterceptor(
                 webView,
                 LISTENER_NAME,
                 setOf(widgetOrigin ?: "*"),
-                WebViewCompat.WebMessageListener { _, message, _, _, _ ->
-                    onMessageReceived(message.data)
+                WebViewCompat.WebMessageListener { _, message, sourceOrigin, isMainFrame, _ ->
+                    if (isAllowedWidgetMessageSource(sourceOrigin.toString(), isMainFrame, widgetOrigin)) {
+                        onMessageReceived(message.data)
+                    }
                 }
             )
         }

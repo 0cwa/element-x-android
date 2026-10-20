@@ -1,4 +1,5 @@
 import extension.setupDependencyInjection
+import extension.testCommonDependencies
 
 /*
  * Copyright (c) 2026 Element Creations Ltd.
@@ -28,4 +29,6 @@ dependencies {
     implementation(libs.androidx.webkit)
     implementation(libs.coroutines.core)
     implementation(libs.serialization.json)
+
+    testCommonDependencies(libs)
 }
