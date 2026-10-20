@@ -54,6 +54,7 @@ import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.launch
+import org.maplibre.compose.camera.CameraAnimation
 import org.maplibre.compose.camera.CameraMoveReason
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.map.MapState
@@ -101,7 +102,7 @@ private fun ShowLocationViewContent(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val tileStyleUrl = rememberTileStyleUrl(state.customMapTilerConfig.dataOrNull())
+    val tileStyleUrl = rememberTileStyleUrl(state.mapTilerConfig)
     val mapState = rememberMapState(
         baseStyle = BaseStyle.Uri(tileStyleUrl),
         initialCameraPosition = MapDefaults.defaultCameraPosition,
@@ -149,7 +150,7 @@ private fun ShowLocationViewContent(
                 zoom = mapState.cameraPosition.zoom.coerceAtLeast(MapDefaults.DEFAULT_ZOOM),
             )
             coroutineScope.launch {
-                mapState.animateCameraPosition(position = position)
+                mapState.animateCamera(update = position.toCameraUpdate(), animation = CameraAnimation.Fly())
             }
         },
         modifier = modifier,
@@ -177,7 +178,7 @@ private fun ShowLocationScaffold(
         }
     }
     MapBottomSheetScaffold(
-        isReady = state.customMapTilerConfig.isReady(),
+        isReady = state.mapTilerConfig != null,
         sheetDragHandle = if (state.isSheetDraggable) {
             { BottomSheetDefaults.DragHandle() }
         } else {

@@ -18,6 +18,8 @@ import io.element.android.libraries.matrix.impl.fixtures.factories.aRustUserProf
 import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiClient
 import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiSyncService
 import io.element.android.libraries.matrix.impl.room.FakeTimelineEventFilterFactory
+import io.element.android.libraries.matrix.impl.search.RustSearchBackfillService
+import io.element.android.libraries.matrix.impl.search.workmanager.SearchBackfillRequestBuilder
 import io.element.android.libraries.matrix.test.AN_AVATAR_URL
 import io.element.android.libraries.matrix.test.A_DEVICE_ID
 import io.element.android.libraries.matrix.test.A_ROOM_ID
@@ -27,6 +29,7 @@ import io.element.android.libraries.matrix.test.scanner.FakeContentScanner
 import io.element.android.libraries.sessionstorage.api.SessionStore
 import io.element.android.libraries.sessionstorage.test.InMemorySessionStore
 import io.element.android.libraries.sessionstorage.test.aSessionData
+import io.element.android.libraries.workmanager.api.WorkManagerRequestWrapper
 import io.element.android.libraries.workmanager.test.FakeWorkManagerScheduler
 import io.element.android.services.analytics.test.FakeAnalyticsService
 import io.element.android.services.toolbox.test.systemclock.FakeSystemClock
@@ -253,7 +256,15 @@ class RustMatrixClientTest {
     @Test
     fun `getDatabaseSizes returns the database sizes`() = runTest {
         val client = createRustMatrixClient(
-            client = FakeFfiClient(getStoreSizesResult = { StoreSizes(null, 10uL, 11uL, 12uL) })
+            client = FakeFfiClient(getStoreSizesResult = {
+                StoreSizes(
+                    cryptoStore = null,
+                    stateStore = 10uL,
+                    eventCacheStore = 11uL,
+                    mediaStore = 12uL,
+                    searchIndex = 13uL,
+                )
+            })
         )
 
         client.getDatabaseSizes().getOrThrow().run {
@@ -261,6 +272,7 @@ class RustMatrixClientTest {
             assertThat(stateStore).isEqualTo(10.bytes)
             assertThat(eventCacheStore).isEqualTo(11.bytes)
             assertThat(mediaStore).isEqualTo(12.bytes)
+            assertThat(searchIndex).isEqualTo(13.bytes)
         }
     }
 
@@ -325,8 +337,19 @@ class RustMatrixClientTest {
         timelineEventFilterFactory = FakeTimelineEventFilterFactory(),
         featureFlagService = FakeFeatureFlagService(),
         analyticsService = FakeAnalyticsService(),
-        workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+        workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}, cancelLambda = { _, _ -> }),
         contentScanner = FakeContentScanner(),
         isMessageSearchAvailable = false,
+        searchBackfillServiceFactory = object : RustSearchBackfillService.Factory {
+            override fun create(innerClient: Client) = RustSearchBackfillService(
+                innerClient = innerClient,
+                searchBackfillRequestBuilderFactory = {
+                    object : SearchBackfillRequestBuilder {
+                        override suspend fun build(): Result<List<WorkManagerRequestWrapper>> = Result.success(emptyList())
+                    }
+                },
+                workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}, cancelLambda = { _, _ -> }),
+            )
+        },
     )
 }

@@ -59,10 +59,15 @@ dependencies {
     implementation(platform("io.element.android:element-call-bom:$elementCallVersion"))
     implementation(libs.element.call.api)
     implementation(projects.features.callnative.api)
-    implementation(libs.element.call.matrix)
+    implementation(libs.element.call.matrix) {
+        if (usesLocalRustSdk) {
+            exclude(group = "org.matrix.rustcomponents", module = "sdk-android")
+        }
+    }
 
     implementation(projects.appconfig)
     implementation(projects.features.enterprise.api)
+    implementation(projects.features.networkmonitor.api)
     implementation(projects.libraries.androidutils)
     implementation(projects.libraries.architecture)
     implementation(projects.libraries.di)
@@ -80,15 +85,17 @@ dependencies {
     implementation(libs.serialization.json)
     implementation(platform(libs.network.okhttp.bom))
     implementation(libs.network.okhttp)
+    implementation(libs.androidx.lifecycle.process)
 
     testCommonDependencies(libs)
     testImplementation(projects.features.enterprise.test)
+    testImplementation(projects.features.networkmonitor.test)
     testImplementation(projects.libraries.featureflag.test)
     testImplementation(projects.libraries.matrix.test)
     testImplementation(projects.libraries.previewutils)
+    testImplementation(libs.network.mockwebserver)
     testImplementation(projects.libraries.sessionStorage.test)
     testImplementation(projects.libraries.workmanager.test)
-    testImplementation(libs.network.mockwebserver)
     testImplementation(projects.services.analytics.test)
     testImplementation(projects.services.toolbox.test)
 }
