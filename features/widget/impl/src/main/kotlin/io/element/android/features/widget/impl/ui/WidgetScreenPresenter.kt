@@ -302,7 +302,8 @@ class WidgetScreenPresenter(
         return WidgetPreloadPermission.Required(
             creatorUserId = inputs.creatorUserId,
             creatorDisplayName = creator?.displayName?.takeIf { it.isNotBlank() } ?: inputs.creatorUserId,
-            creatorAvatarUrl = creator?.avatarUrl,
+            // A creator's avatar is shown before widget consent; never fetch third-party URLs here.
+            creatorAvatarUrl = avatarUrlBeforeWidgetConsent(creator?.avatarUrl),
             widgetDomain = domain,
             isRoomEncrypted = inputs.isRoomEncrypted,
         )
@@ -428,3 +429,7 @@ private data class PendingOpenIdRequest(
     val rawMessage: String,
     val requestId: String,
 )
+
+/** Only Matrix media URLs may be loaded in the widget's pre-consent UI. */
+internal fun avatarUrlBeforeWidgetConsent(avatarUrl: String?): String? =
+    avatarUrl?.takeIf { it.startsWith("mxc://", ignoreCase = true) }

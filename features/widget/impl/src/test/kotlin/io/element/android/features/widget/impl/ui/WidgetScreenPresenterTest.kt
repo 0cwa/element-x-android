@@ -97,6 +97,15 @@ class WidgetScreenPresenterTest : RobolectricTest() {
     }
 
     @Test
+    fun `widget consent never loads external creator avatars`() {
+        assertThat(avatarUrlBeforeWidgetConsent("https://tracker.example/avatar.png")).isNull()
+        assertThat(avatarUrlBeforeWidgetConsent("data:image/png;base64,example")).isNull()
+        assertThat(avatarUrlBeforeWidgetConsent(null)).isNull()
+        assertThat(avatarUrlBeforeWidgetConsent("mxc://example.org/image")).isEqualTo("mxc://example.org/image")
+        assertThat(avatarUrlBeforeWidgetConsent("MXC://example.org/image")).isEqualTo("MXC://example.org/image")
+    }
+
+    @Test
     fun `invalid widget url is rejected before widget creation`() = runTest {
         val provider = FakeWidgetProvider()
         val presenter = createWidgetScreenPresenter(
