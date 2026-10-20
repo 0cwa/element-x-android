@@ -246,7 +246,7 @@ class WidgetScreenPresenterTest : RobolectricTest() {
     }
 
     @Test
-    fun `openid request for another widget cannot trigger identity consent`() = runTest {
+    fun `openid request for another widget cannot trigger identity consent or reach the SDK`() = runTest {
         val driver = FakeMatrixWidgetDriver(id = "widget-id")
         val presenter = createWidgetScreenPresenter(
             data = aWidgetActivityData(creatorUserId = A_SESSION_ID.value),
@@ -269,7 +269,56 @@ class WidgetScreenPresenterTest : RobolectricTest() {
 
             assertThat(state.isOpenIdPermissionRequired).isFalse()
             assertThat(interceptor.sentMessages).isEmpty()
-            assertThat(driver.sentMessages).containsExactly(request)
+            assertThat(driver.sentMessages).isEmpty()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `malformed openid commands cannot bypass consent through the SDK relay`() = runTest {
+        val driver = FakeMatrixWidgetDriver(id = "widget-id")
+        val presenter = createWidgetScreenPresenter(
+            data = aWidgetActivityData(creatorUserId = A_SESSION_ID.value),
+            widgetProvider = FakeWidgetProvider(driver = driver),
+        )
+        val interceptor = FakeWidgetMessageInterceptor()
+        val validRequest = """{"api":"fromWidget","widgetId":"widget-id","requestId":"openid-valid","action":"get_openid","data":{}}"""
+        val malformedRequests = buildList {
+            listOf<Any>(JSONObject.NULL, false, "", JSONObject()).forEach { response ->
+                add(JSONObject(validRequest).put("response", response).toString())
+            }
+            listOf<Any>("", " ", JSONObject.NULL, 7).forEach { requestId ->
+                add(JSONObject(validRequest).put("requestId", requestId).toString())
+            }
+            add(JSONObject(validRequest).apply { remove("requestId") }.toString())
+        }
+
+        presenter.test {
+            var state = awaitItem()
+            while (state.urlState !is AsyncData.Success) {
+                state = awaitItem()
+            }
+
+            state.eventSink(WidgetScreenEvents.SetMessageInterceptor(interceptor))
+            state.eventSink(WidgetScreenEvents.OnWebViewLoaded)
+            runCurrent()
+            malformedRequests.forEach { request ->
+                interceptor.givenInterceptedMessage(request)
+                runCurrent()
+            }
+
+            assertThat(driver.sentMessages).isEmpty()
+            assertThat(interceptor.sentMessages).isEmpty()
+
+            interceptor.givenInterceptedMessage(validRequest)
+            runCurrent()
+            while (!state.isOpenIdPermissionRequired) {
+                state = awaitItem()
+            }
+            assertThat(driver.sentMessages).isEmpty()
+            state.eventSink(WidgetScreenEvents.GrantOpenIdPermission)
+            runCurrent()
+            assertThat(driver.sentMessages).containsExactly(validRequest)
             cancelAndIgnoreRemainingEvents()
         }
     }
