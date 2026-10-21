@@ -13,41 +13,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  publish-reviewed-source:
+  export-reviewed-source:
     if: github.repository == '0cwa/element-x-android' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'widget-host-validation-2026-10-21'
-    permissions:
-      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: 8666f9f2d20f30fbe5a592f681d52988589db7dd
           persist-credentials: false
-      - name: Verify reviewed source patch
+      - name: Export tracked public source only
         run: |
-          cat .github/widget-validation/capability.*.b64 | base64 --decode > "$RUNNER_TEMP/capability.patch.gz"
-          echo "f23f9371903dc38fea4e4c584c0977615aafc8011e38b2960f5ce382e053e88b  $RUNNER_TEMP/capability.patch.gz" | sha256sum --check
-          gzip --decompress --stdout "$RUNNER_TEMP/capability.patch.gz" > "$RUNNER_TEMP/capability.patch"
-          echo "fdb8a2b8cfcefaab12d992f20aac23b0553e8eb157881a41b551faa874081456  $RUNNER_TEMP/capability.patch" | sha256sum --check
-      - name: Commit feature on its reviewed prerequisite
-        run: |
-          git fetch --no-tags origin c7d04f7c623db8936164ac9f90478d334bfb5bad
-          git checkout --detach c7d04f7c623db8936164ac9f90478d334bfb5bad
-          git apply --check "$RUNNER_TEMP/capability.patch"
-          git apply --index "$RUNNER_TEMP/capability.patch"
-          git diff --cached --check
-          test "$(git diff --cached --name-only | wc -l)" -eq 17
-          test -z "$(git diff --cached --name-only -- .github)"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'feat(widget): request native approval for negotiated Matrix capabilities' -m 'Present exact event filters and privileged operations before granting them. Keep approvals scoped to the active host and cancel pending requests on close or bridge replacement. Preserve the driver lifetime across bridge replacement. Add provider, controller and presenter regression coverage. AI-assisted; standalone pinned-API harness passed 29 assertions; Android CI required.'
-          git show --stat --oneline HEAD
-      - name: Publish new feature branch without rewriting existing refs
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          test -z "$(git ls-remote --heads origin widget-support-07-capability-consent)"
-          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin HEAD:refs/heads/widget-support-07-capability-consent
-          printf 'Capability feature commit: `%s`\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          test "$(git rev-parse HEAD)" = 8666f9f2d20f30fbe5a592f681d52988589db7dd
+          git ls-files -z | tar --null --verbatim-files-from --no-recursion -czf "$RUNNER_TEMP/widget-reviewed-source.tar.gz" -T -
+          git rev-parse HEAD > "$RUNNER_TEMP/source-commit.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: widget-reviewed-source
+          path: |
+            ${{ runner.temp }}/widget-reviewed-source.tar.gz
+            ${{ runner.temp }}/source-commit.txt
+          retention-days: 3
+          if-no-files-found: error
