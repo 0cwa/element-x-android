@@ -7,25 +7,18 @@
 
 package io.element.android.libraries.matrix.api.widget
 
-/**
- * Defines which capabilities a widget driver is allowed to grant.
- */
-enum class MatrixWidgetCapabilitiesPolicy {
-    /**
-     * Restrict capabilities to the set required by Element Call.
-     *
-     * This is the default used by existing trusted call flows, not by generic widgets.
-     */
-    ElementCall,
+/** Defines how a widget driver obtains approval for negotiated Matrix capabilities. */
+sealed interface MatrixWidgetCapabilitiesPolicy {
+    /** The existing trusted Call flow; never use this policy for arbitrary room widgets. */
+    data object ElementCall : MatrixWidgetCapabilitiesPolicy
+
+    /** Safe default for hosts that have no interactive permission UI. */
+    data object DenyAll : MatrixWidgetCapabilitiesPolicy
 
     /**
-     * Deny every capability requested by the widget.
-     *
-     * Generic widgets use this policy until an interactive capability permission flow is implemented.
-     * The SDK's suspending callback alone does not imply user approval.
-     *
-     * This only denies negotiated Matrix capabilities. The SDK handles core Widget API requests such
-     * as `get_openid` separately; the generic host must obtain identity consent before forwarding them.
+     * Await native approval of the exact requested permissions. A callback can approve or deny,
+     * but cannot add permissions. Grants belong to this driver, not the widget origin globally.
+     * OpenID and WebView camera/microphone access require their own separate consent.
      */
-    DenyAll,
+    data class AskUser(val approve: suspend (List<MatrixWidgetPermission>) -> Boolean) : MatrixWidgetCapabilitiesPolicy
 }

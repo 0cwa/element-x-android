@@ -57,6 +57,7 @@ import io.element.android.libraries.matrix.impl.timeline.item.event.TimelineEven
 import io.element.android.libraries.matrix.impl.user.map
 import io.element.android.libraries.matrix.impl.util.MessageEventContent
 import io.element.android.libraries.matrix.impl.util.mxCallbackFlow
+import io.element.android.libraries.matrix.impl.widget.RustWidgetCapabilitiesProvider
 import io.element.android.libraries.matrix.impl.widget.RustWidgetDriver
 import io.element.android.libraries.matrix.impl.widget.generateWidgetWebViewUrl
 import io.element.android.services.toolbox.api.systemclock.SystemClock
@@ -85,9 +86,6 @@ import org.matrix.rustcomponents.sdk.TimelineFilter
 import org.matrix.rustcomponents.sdk.TimelineFocus
 import org.matrix.rustcomponents.sdk.TypingNotificationsListener
 import org.matrix.rustcomponents.sdk.UserPowerLevelUpdate
-import org.matrix.rustcomponents.sdk.WidgetCapabilities
-import org.matrix.rustcomponents.sdk.WidgetCapabilitiesProvider
-import org.matrix.rustcomponents.sdk.getElementCallRequiredPermissions
 import org.matrix.rustcomponents.sdk.use
 import timber.log.Timber
 import uniffi.matrix_sdk.RoomPowerLevelChanges
@@ -482,25 +480,11 @@ class JoinedRustRoom(
             RustWidgetDriver(
                 widgetSettings = widgetSettings,
                 room = innerRoom,
-                widgetCapabilitiesProvider = object : WidgetCapabilitiesProvider {
-                    override suspend fun acquireCapabilities(capabilities: WidgetCapabilities): WidgetCapabilities {
-                        return when (capabilitiesPolicy) {
-                            MatrixWidgetCapabilitiesPolicy.ElementCall ->
-                                getElementCallRequiredPermissions(sessionId.value, baseRoom.deviceId.value)
-                            MatrixWidgetCapabilitiesPolicy.DenyAll -> WidgetCapabilities(
-                                read = emptyList(),
-                                send = emptyList(),
-                                requiresClient = false,
-                                updateDelayedEvent = false,
-                                sendDelayedEvent = false,
-                                downloadFiles = false,
-                                rtcTransports = false,
-                                rtcLivekitGetToken = false,
-                                rtcLivekitDelegateDelayedLeave = false,
-                            )
-                        }
-                    }
-                },
+                widgetCapabilitiesProvider = RustWidgetCapabilitiesProvider(
+                    policy = capabilitiesPolicy,
+                    userId = sessionId.value,
+                    deviceId = baseRoom.deviceId.value,
+                ),
             )
         }
     }

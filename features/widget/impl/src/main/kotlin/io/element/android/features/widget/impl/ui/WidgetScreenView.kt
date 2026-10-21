@@ -26,10 +26,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -38,6 +36,7 @@ import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import io.element.android.features.widget.impl.R
+import io.element.android.features.widget.impl.permissions.WidgetMediaPermissionController
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.designsystem.components.ProgressDialog
 import io.element.android.libraries.designsystem.components.avatar.Avatar
@@ -68,11 +67,15 @@ internal fun WidgetScreenView(
     requestPermissions: (Array<String>, RequestPermissionCallback) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    fun handleBack() {
-        state.eventSink(WidgetScreenEvents.Close)
+    val mediaPermissions = remember(state.widgetOrigin) { WidgetMediaPermissionController(state.widgetOrigin) }
+    DisposableEffect(mediaPermissions) {
+        onDispose { mediaPermissions.close() }
     }
 
-    var pendingPermissionRequest by remember { mutableStateOf<PermissionRequest?>(null) }
+    fun handleBack() {
+        mediaPermissions.close()
+        state.eventSink(WidgetScreenEvents.Close)
+    }
 
     Scaffold(
         modifier = modifier,
@@ -119,25 +122,8 @@ internal fun WidgetScreenView(
                         .fillMaxSize(),
                     url = state.urlState,
                     userAgent = state.userAgent,
-                    onPermissionsRequest = { request ->
-                        val requestOrigin = widgetOrigin(request.origin.toString())
-                        val androidPermissions = mapWebkitPermissions(request.resources)
-                        if (pendingPermissionRequest != null) {
-                            request.deny()
-                        } else if (state.widgetOrigin != null &&
-                            requestOrigin == state.widgetOrigin &&
-                            androidPermissions.isNotEmpty()
-                        ) {
-                            pendingPermissionRequest = request
-                        } else {
-                            request.deny()
-                        }
-                    },
-                    onPermissionsRequestCancel = { request ->
-                        if (pendingPermissionRequest === request) {
-                            pendingPermissionRequest = null
-                        }
-                    },
+                    onPermissionsRequest = mediaPermissions::receive,
+                    onPermissionsRequestCancel = mediaPermissions::cancel,
                     onConsoleMessage = onConsoleMessage,
                     onCreateWebView = { webView ->
                         val interceptor = WebViewWidgetMessageInterceptor(
@@ -152,8 +138,7 @@ internal fun WidgetScreenView(
                         interceptor.isMessageChannelAvailable
                     },
                     onDestroyWebView = {
-                        pendingPermissionRequest?.deny()
-                        pendingPermissionRequest = null
+                        mediaPermissions.detach()
                         state.eventSink(WidgetScreenEvents.SetMessageInterceptor(null))
                     },
                 )
@@ -174,7 +159,16 @@ internal fun WidgetScreenView(
         }
     }
 
-    if (state.isOpenIdPermissionRequired) {
+    val capabilityRequest = state.capabilityRequest
+    if (capabilityRequest != null) {
+        WidgetCapabilityDialog(
+            request = capabilityRequest,
+            origin = state.widgetOrigin ?: state.widgetName,
+            onRespond = { allowed ->
+                state.eventSink(WidgetScreenEvents.RespondToCapabilities(capabilityRequest.id, allowed))
+            },
+        )
+    } else if (state.isOpenIdPermissionRequired) {
         ConfirmationDialog(
             title = stringResource(R.string.screen_widget_openid_permission_title),
             content = stringResource(
@@ -190,7 +184,7 @@ internal fun WidgetScreenView(
             },
         )
     } else {
-        pendingPermissionRequest?.let { request ->
+        mediaPermissions.prompt?.let { request ->
             val permissionNames = mutableListOf<String>()
             if (PermissionRequest.RESOURCE_AUDIO_CAPTURE in request.resources) {
                 permissionNames += stringResource(R.string.screen_widget_permission_request_microphone)
@@ -207,21 +201,8 @@ internal fun WidgetScreenView(
                     permissionNames.joinToString(", "),
                 ),
                 submitText = stringResource(CommonStrings.action_continue),
-                onSubmitClick = {
-                    pendingPermissionRequest = null
-                    val androidPermissions = mapWebkitPermissions(request.resources)
-                    requestPermissions(androidPermissions.toTypedArray()) { resourcesToGrant ->
-                        if (resourcesToGrant.isEmpty()) {
-                            request.deny()
-                        } else {
-                            request.grant(resourcesToGrant)
-                        }
-                    }
-                },
-                onDismiss = {
-                    pendingPermissionRequest = null
-                    request.deny()
-                },
+                onSubmitClick = { mediaPermissions.approve(request, requestPermissions) },
+                onDismiss = { mediaPermissions.deny(request) },
             )
         }
     }
@@ -369,16 +350,6 @@ private fun WebView.setup(
         override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
             onConsoleMessage(consoleMessage)
             return true
-        }
-    }
-}
-
-internal fun mapWebkitPermissions(permissions: Array<String>): List<String> {
-    return permissions.mapNotNull { permission ->
-        when (permission) {
-            PermissionRequest.RESOURCE_AUDIO_CAPTURE -> android.Manifest.permission.RECORD_AUDIO
-            PermissionRequest.RESOURCE_VIDEO_CAPTURE -> android.Manifest.permission.CAMERA
-            else -> null
         }
     }
 }

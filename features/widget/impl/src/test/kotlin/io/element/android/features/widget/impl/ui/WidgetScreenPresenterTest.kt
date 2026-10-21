@@ -18,6 +18,8 @@ import io.element.android.features.widget.impl.permissions.WidgetPermissionStore
 import io.element.android.features.widget.impl.utils.WidgetProvider
 import io.element.android.libraries.androidutils.json.DefaultJsonProvider
 import io.element.android.libraries.architecture.AsyncData
+import io.element.android.libraries.matrix.api.widget.MatrixWidgetCapabilitiesPolicy
+import io.element.android.libraries.matrix.api.widget.MatrixWidgetPermission
 import io.element.android.libraries.matrix.test.A_ROOM_ID
 import io.element.android.libraries.matrix.test.A_SESSION_ID
 import io.element.android.libraries.matrix.test.FakeMatrixClientProvider
@@ -30,7 +32,9 @@ import io.element.android.services.appnavstate.test.FakeActiveRoomsHolder
 import io.element.android.tests.testutils.WarmUpRule
 import io.element.android.tests.testutils.robolectric.RobolectricTest
 import io.element.android.tests.testutils.test
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -232,6 +236,7 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             }
 
             state.eventSink(WidgetScreenEvents.SetMessageInterceptor(firstInterceptor))
+            state.eventSink(WidgetScreenEvents.OnWebViewLoaded)
             runCurrent()
             state = awaitItem()
 
@@ -241,6 +246,11 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             runCurrent()
 
             assertThat(driver.sentMessages).containsExactly("A reply")
+            assertThat(driver.runCalledCount).isEqualTo(1)
+            driver.givenIncomingMessage("SDK response")
+            runCurrent()
+            assertThat(secondInterceptor.sentMessages).containsExactly("SDK response")
+            assertThat(firstInterceptor.sentMessages).isEmpty()
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -447,6 +457,35 @@ class WidgetScreenPresenterTest : RobolectricTest() {
     }
 
     @Test
+    fun `Matrix capabilities wait for the matching native approval and are cancelled on close`() = runTest {
+        val provider = FakeWidgetProvider()
+        val presenter = createWidgetScreenPresenter(
+            data = aWidgetActivityData(creatorUserId = A_SESSION_ID.value),
+            widgetProvider = provider,
+        )
+        presenter.test {
+            var state = awaitItem()
+            while (state.urlState !is AsyncData.Success) state = awaitItem()
+            state.eventSink(WidgetScreenEvents.SetMessageInterceptor(FakeWidgetMessageInterceptor()))
+            state.eventSink(WidgetScreenEvents.OnWebViewLoaded)
+            runCurrent()
+            val policy = provider.lastCapabilitiesPolicy as MatrixWidgetCapabilitiesPolicy.AskUser
+            val permissions = listOf(MatrixWidgetPermission(MatrixWidgetPermission.Kind.ReadState, "m.room.name"))
+            val first = async(start = CoroutineStart.UNDISPATCHED) { policy.approve(permissions) }
+            while (state.capabilityRequest == null) state = awaitItem()
+            assertThat(first.isCompleted).isFalse()
+            state.eventSink(WidgetScreenEvents.RespondToCapabilities(requireNotNull(state.capabilityRequest).id, true))
+            runCurrent()
+            assertThat(first.await()).isTrue()
+            val second = async(start = CoroutineStart.UNDISPATCHED) { policy.approve(permissions) }
+            state.eventSink(WidgetScreenEvents.Close)
+            runCurrent()
+            assertThat(second.await()).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `closing a loaded widget sends close message before shutdown`() = runTest {
         val driver = FakeMatrixWidgetDriver(id = "widget-id")
         val provider = FakeWidgetProvider(driver = driver)
@@ -559,6 +598,7 @@ class WidgetScreenPresenterTest : RobolectricTest() {
         private val driver: FakeMatrixWidgetDriver = FakeMatrixWidgetDriver(id = "widget-id"),
         private val generatedUrl: String = "https://widget.example/generated",
     ) : WidgetProvider {
+        var lastCapabilitiesPolicy: MatrixWidgetCapabilitiesPolicy? = null
         var callCount = 0
             private set
 
@@ -571,8 +611,10 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             initAfterContentLoad: Boolean,
             languageTag: String?,
             theme: String?,
+            capabilitiesPolicy: MatrixWidgetCapabilitiesPolicy,
         ): Result<WidgetProvider.GetWidgetResult> {
             callCount++
+            lastCapabilitiesPolicy = capabilitiesPolicy
             return Result.success(WidgetProvider.GetWidgetResult(driver = driver, url = generatedUrl))
         }
     }

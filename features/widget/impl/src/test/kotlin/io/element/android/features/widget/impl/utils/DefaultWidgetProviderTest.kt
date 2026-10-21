@@ -58,6 +58,31 @@ class DefaultWidgetProviderTest {
         assertThat(capturedPolicy).isEqualTo(MatrixWidgetCapabilitiesPolicy.DenyAll)
     }
 
+    @Test
+    fun `interactive policy is forwarded without granting capabilities in the provider`() = runTest {
+        val policy = MatrixWidgetCapabilitiesPolicy.AskUser { false }
+        var captured: MatrixWidgetCapabilitiesPolicy? = null
+        val room = FakeJoinedRoom(
+            generateWidgetWebViewUrlResult = { _, _, _, _ -> Result.success("https://widget.example/generated") },
+            getWidgetDriverResult = { Result.success(FakeMatrixWidgetDriver(id = "widget-id")) },
+            onGetWidgetDriver = { _, selected -> captured = selected },
+        )
+        val provider = DefaultWidgetProvider(FakeMatrixClientProvider(), SingleRoomHolder(room))
+        val result = provider.getWidget(
+            sessionId = A_SESSION_ID,
+            roomId = A_ROOM_ID,
+            clientId = "client-id",
+            widgetId = "widget-id",
+            url = "https://widget.example",
+            initAfterContentLoad = false,
+            languageTag = "en-US",
+            theme = "light",
+            capabilitiesPolicy = policy,
+        )
+        assertThat(result.isSuccess).isTrue()
+        assertThat(captured).isSameInstanceAs(policy)
+    }
+
     private class SingleRoomHolder(
         private val room: JoinedRoom,
     ) : ActiveRoomsHolder {
