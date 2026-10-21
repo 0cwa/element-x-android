@@ -20,5 +20,5 @@ sealed interface MatrixWidgetCapabilitiesPolicy {
      * but cannot add permissions. Grants belong to this driver, not the widget origin globally.
      * OpenID and WebView camera/microphone access require their own separate consent.
      */
-    class AskUser(val approve: suspend (List<MatrixWidgetPermission>) -> Boolean) : MatrixWidgetCapabilitiesPolicy
+    data class AskUser(val approve: suspend (List<MatrixWidgetPermission>) -> Boolean) : MatrixWidgetCapabilitiesPolicy
 }
