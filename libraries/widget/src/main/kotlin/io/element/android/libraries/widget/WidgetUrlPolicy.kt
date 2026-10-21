@@ -25,7 +25,7 @@ fun widgetOrigin(rawUrl: String): String? = runCatchingExceptions {
     val host = uri.host?.lowercase() ?: return@runCatchingExceptions null
     val normalizedHost = if (host.contains(':') && !host.startsWith("[")) "[$host]" else host
     val port = uri.port
-    if (port != -1 && port !in 0..65535) return@runCatchingExceptions null
+    if (port != -1 && port !in 0..65_535) return@runCatchingExceptions null
     val isDefaultPort = when (scheme) {
         "https" -> port == 443
         "http" -> port == 80
@@ -41,7 +41,7 @@ fun isAllowedWidgetNavigation(rawUrl: String, expectedOrigin: String): Boolean {
 
 /** Generic widgets are top-level documents; subframes must not acquire their native bridge. */
 internal fun isAllowedWidgetMessageSource(sourceOrigin: String, isMainFrame: Boolean, expectedOrigin: String?): Boolean {
-    return expectedOrigin == null || (isMainFrame && widgetOrigin(sourceOrigin) == expectedOrigin)
+    return expectedOrigin == null || isMainFrame && widgetOrigin(sourceOrigin) == expectedOrigin
 }
 
 /**

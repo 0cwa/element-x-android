@@ -310,24 +310,24 @@ private fun WidgetWebView(
             modifier = modifier,
             factory = { context ->
                 WebView(context).apply {
-                    val canLoadWidget = onCreateWebView(this)
-                    tag = canLoadWidget
-                    if (canLoadWidget) {
+                    if (onCreateWebView(this)) {
                         setup(
                             userAgent = userAgent,
                             onPermissionsRequested = onPermissionsRequest,
                             onPermissionsRequestCanceled = onPermissionsRequestCancel,
                             onConsoleMessage = onConsoleMessage,
                         )
+                        tag = WidgetWebViewUrlLoader(::loadUrl)
                     }
                 }
             },
             update = { webView ->
-                if (webView.tag == true && url is AsyncData.Success && webView.url != url.data) {
-                    webView.loadUrl(url.data)
-                }
+                // Browser redirects/hash changes are not changes to the host's requested URL.
+                // Comparing webView.url would reset the widget whenever a native dialog recomposes.
+                (webView.tag as? WidgetWebViewUrlLoader)?.update(url)
             },
             onRelease = { webView ->
+                webView.tag = null
                 onDestroyWebView(webView)
                 webView.destroy()
             }
