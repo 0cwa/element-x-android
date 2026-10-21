@@ -28,4 +28,21 @@
     <string name="screen_widget_permission_request_microphone">"microphone"</string>
     <string name="screen_widget_openid_permission_title">"Allow identity verification?"</string>
     <string name="screen_widget_openid_permission_content">"Allow %1$s to receive a short-lived Matrix identity token? This lets the widget verify your Matrix user ID with your homeserver."</string>
+    <string name="screen_widget_capabilities_title">Extension permissions</string>
+    <string name="screen_widget_capabilities_warning">%1$s requests the following access. Room data, including decrypted content from encrypted rooms, may be shared with this extension. Approve only extensions you trust.</string>
+    <string name="screen_widget_capability_read_messages">Read messages in this room</string>
+    <string name="screen_widget_capability_send_messages">Send messages as you in this room</string>
+    <string name="screen_widget_capability_read_state">Read room information</string>
+    <string name="screen_widget_capability_send_state">Change room information as you</string>
+    <string name="screen_widget_capability_read_to_device">Read messages sent directly to this device</string>
+    <string name="screen_widget_capability_send_to_device">Send messages to other devices as you</string>
+    <string name="screen_widget_capability_send_delayed">Schedule delayed events</string>
+    <string name="screen_widget_capability_update_delayed">Update or cancel delayed events</string>
+    <string name="screen_widget_capability_download_files">Download Matrix media</string>
+    <string name="screen_widget_capability_rtc_transports">Discover the homeserver call services</string>
+    <string name="screen_widget_capability_livekit_token">Obtain a LiveKit login token for your Matrix identity</string>
+    <string name="screen_widget_capability_livekit_leave">Delegate leaving a call to the homeserver</string>
+    <string name="screen_widget_capability_message_type">Message subtype: %1$s</string>
+    <string name="screen_widget_capability_state_key">State key: %1$s</string>
+    <string name="screen_widget_capability_all_state_keys">All state keys</string>
 </resources>

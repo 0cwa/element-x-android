@@ -32,6 +32,7 @@ class DefaultWidgetProvider(
         initAfterContentLoad: Boolean,
         languageTag: String?,
         theme: String?,
+        capabilitiesPolicy: MatrixWidgetCapabilitiesPolicy,
     ): Result<WidgetProvider.GetWidgetResult> = runCatchingExceptions {
         val widgetSettings = MatrixWidgetSettings(
             id = widgetId,
@@ -59,7 +60,7 @@ class DefaultWidgetProvider(
         Timber.v("Generated widget URL for widgetId: ${widgetSettings.id}")
         val driver = room.getWidgetDriver(
             widgetSettings = widgetSettings,
-            capabilitiesPolicy = MatrixWidgetCapabilitiesPolicy.DenyAll,
+            capabilitiesPolicy = capabilitiesPolicy,
         ).getOrThrow()
 
         WidgetProvider.GetWidgetResult(

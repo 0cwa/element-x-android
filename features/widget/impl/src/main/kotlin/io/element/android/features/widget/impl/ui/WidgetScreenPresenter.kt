@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +23,7 @@ import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.features.widget.api.WidgetActivityData
+import io.element.android.features.widget.impl.permissions.WidgetCapabilityConsent
 import io.element.android.features.widget.impl.permissions.WidgetPermissionStore
 import io.element.android.features.widget.impl.utils.WidgetProvider
 import io.element.android.libraries.architecture.AsyncData
@@ -30,6 +32,7 @@ import io.element.android.libraries.architecture.runCatchingUpdatingState
 import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.matrix.api.MatrixClientProvider
 import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.libraries.matrix.api.widget.MatrixWidgetCapabilitiesPolicy
 import io.element.android.libraries.matrix.api.widget.MatrixWidgetDriver
 import io.element.android.libraries.network.useragent.UserAgentProvider
 import io.element.android.libraries.widget.WidgetMessage
@@ -73,6 +76,9 @@ class WidgetScreenPresenter(
     @Composable
     override fun present(): WidgetScreenState {
         val coroutineScope = rememberCoroutineScope()
+        val capabilityConsent = remember { WidgetCapabilityConsent() }
+        val capabilityRequest by capabilityConsent.request.collectAsState()
+        val capabilitiesPolicy = remember { MatrixWidgetCapabilitiesPolicy.AskUser(capabilityConsent::approve) }
         val urlState = remember { mutableStateOf<AsyncData<String>>(AsyncData.Uninitialized) }
         val widgetDriver = remember { mutableStateOf<MatrixWidgetDriver?>(null) }
         val messageInterceptor = remember { mutableStateOf<WidgetMessageInterceptor?>(null) }
@@ -87,18 +93,21 @@ class WidgetScreenPresenter(
         }
 
         fun closeScreen() {
+            capabilityConsent.close()
             closeDriver(widgetDriver.value)
             navigator.close()
         }
 
         DisposableEffect(Unit) {
             onDispose {
+                capabilityConsent.close()
                 closeDriver(widgetDriver.value)
             }
         }
         var isWidgetLoaded by rememberSaveable { mutableStateOf(false) }
         var ignoreWebViewError by rememberSaveable { mutableStateOf(false) }
         var isWebViewLoaded by remember { mutableStateOf(false) }
+        var isDriverReady by remember { mutableStateOf(false) }
         var webViewError by remember { mutableStateOf<String?>(null) }
         var preloadPermission by remember { mutableStateOf<WidgetPreloadPermission>(WidgetPreloadPermission.Checking) }
         var pendingOpenIdRequest by remember { mutableStateOf<PendingOpenIdRequest?>(null) }
@@ -124,6 +133,7 @@ class WidgetScreenPresenter(
                     languageTag = languageTag,
                     theme = theme,
                     expectedOrigin = expectedOrigin,
+                    capabilitiesPolicy = capabilitiesPolicy,
                 )
             }
         }
@@ -131,7 +141,13 @@ class WidgetScreenPresenter(
         val driver = widgetDriver.value
         val interceptor = messageInterceptor.value
         val canStartDriver = !widgetActivityData.waitForIframeLoad || isWebViewLoaded
-        if (driver != null && interceptor != null && canStartDriver) {
+        LaunchedEffect(driver, interceptor, canStartDriver) {
+            if (driver != null && interceptor != null && canStartDriver) isDriverReady = true
+        }
+        if (driver != null && isDriverReady) {
+            LaunchedEffect(driver) { driver.run() }
+        }
+        if (driver != null && interceptor != null) {
             LaunchedEffect(driver, interceptor) {
                 driver.incomingMessages
                     .onEach { message ->
@@ -146,8 +162,6 @@ class WidgetScreenPresenter(
                         }
                     }
                     .launchIn(this)
-
-                driver.run()
             }
         }
 
@@ -233,7 +247,11 @@ class WidgetScreenPresenter(
                         interceptor.sendMessage(blockedMessage)
                     }
                 }
+                is WidgetScreenEvents.RespondToCapabilities -> {
+                    capabilityConsent.respond(event.requestId, event.allowed)
+                }
                 is WidgetScreenEvents.Close -> {
+                    capabilityConsent.close()
                     val widgetId = widgetDriver.value?.id
                     val interceptor = messageInterceptor.value
                     if (widgetId != null && interceptor != null && isWidgetLoaded) {
@@ -252,13 +270,15 @@ class WidgetScreenPresenter(
                     }
                 }
                 is WidgetScreenEvents.SetMessageInterceptor -> {
-                    if (event.interceptor == null) {
-                        isWebViewLoaded = false
+                    if (messageInterceptor.value !== event.interceptor) {
+                        capabilityConsent.detach()
                         pendingOpenIdRequest = null
                         suppressedOpenIdPendingRequestIds.clear()
                         syntheticOpenIdRequestIds.clear()
                     }
+                    if (event.interceptor == null) isWebViewLoaded = false
                     messageInterceptor.value = event.interceptor
+                    if (event.interceptor != null) capabilityConsent.attach()
                 }
                 is WidgetScreenEvents.OnWebViewLoaded -> {
                     isWebViewLoaded = true
@@ -280,6 +300,7 @@ class WidgetScreenPresenter(
             userAgent = userAgent,
             isWidgetLoaded = isWidgetLoaded,
             isOpenIdPermissionRequired = pendingOpenIdRequest != null,
+            capabilityRequest = capabilityRequest,
             widgetName = widgetActivityData.widgetName,
             eventSink = ::handleEvent,
         )
@@ -318,6 +339,7 @@ class WidgetScreenPresenter(
         languageTag: String?,
         theme: String?,
         expectedOrigin: String,
+        capabilitiesPolicy: MatrixWidgetCapabilitiesPolicy,
     ) {
         urlState.runCatchingUpdatingState {
             val result = widgetProvider.getWidget(
@@ -329,6 +351,7 @@ class WidgetScreenPresenter(
                 theme = theme,
                 initAfterContentLoad = initAfterContentLoad,
                 url = inputs.url,
+                capabilitiesPolicy = capabilitiesPolicy,
             ).getOrThrow()
 
             if (!isAllowedWidgetNavigation(result.url, expectedOrigin)) {
