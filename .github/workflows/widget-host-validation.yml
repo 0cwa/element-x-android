@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: widget-host-validation-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   source:
     if: github.repository == '0cwa/element-x-android' && github.event.pull_request.head.repo.full_name == github.repository
@@ -20,9 +24,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
       - name: Archive tracked source for offline review
-        run: git archive --format=tar.gz --output=widget-source.tar.gz HEAD
+        run: git ls-files -z | tar --null -T - -czf "$RUNNER_TEMP/widget-source.tar.gz"
+      - name: Retain pinned SDK API source
+        run: curl --fail --location --max-time 60 https://repo.maven.apache.org/maven2/org/matrix/rustcomponents/sdk-android/26.10.15/sdk-android-26.10.15-sources.jar --output "$RUNNER_TEMP/sdk-sources.jar"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
         with:
           name: widget-source
-          path: widget-source.tar.gz
+          path: |
+            ${{ runner.temp }}/widget-source.tar.gz
+            ${{ runner.temp }}/sdk-sources.jar
           retention-days: 3
