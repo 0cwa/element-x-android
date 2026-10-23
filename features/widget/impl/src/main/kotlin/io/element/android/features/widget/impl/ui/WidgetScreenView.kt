@@ -97,7 +97,7 @@ internal fun WidgetScreenView(
                         append(stringResource(CommonStrings.error_unknown))
                         state.webViewError.takeIf { it.isNotEmpty() }?.let { append("\n\n").append(it) }
                     },
-                    onSubmit = { state.eventSink(WidgetScreenEvents.Close) },
+                    onSubmit = ::handleBack,
                 )
             }
             state.preloadPermission is WidgetPreloadPermission.Checking -> {
@@ -148,7 +148,7 @@ internal fun WidgetScreenView(
                         Timber.e("Widget URL could not be loaded")
                         ErrorDialog(
                             content = state.urlState.error.message.orEmpty(),
-                            onSubmit = { state.eventSink(WidgetScreenEvents.Close) },
+                            onSubmit = ::handleBack,
                         )
                     }
                     is AsyncData.Success -> Unit
