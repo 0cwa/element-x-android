@@ -27,6 +27,7 @@ dependencies {
     implementation(projects.libraries.preferences.api)
     implementation(projects.libraries.sessionStorage.api)
     implementation(projects.libraries.uiStrings)
+    api(projects.libraries.widget)
     implementation(projects.services.appnavstate.api)
     implementation(libs.androidx.datastore.preferences)
     api(projects.features.widget.api)
