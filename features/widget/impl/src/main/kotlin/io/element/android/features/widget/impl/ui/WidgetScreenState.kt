@@ -20,5 +20,5 @@ data class WidgetScreenState(
     val isOpenIdPermissionRequired: Boolean,
     val widgetName: String,
     val eventSink: (WidgetScreenEvents) -> Unit,
-    val capabilityRequest: WidgetCapabilityConsent.Request? = null,
+    val capabilityRequest: WidgetCapabilityConsent.Request?,
 )
