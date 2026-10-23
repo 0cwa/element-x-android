@@ -261,7 +261,7 @@ interface JoinedRoom : BaseRoom {
      */
     fun getWidgetDriver(
         widgetSettings: MatrixWidgetSettings,
-        capabilitiesPolicy: MatrixWidgetCapabilitiesPolicy = MatrixWidgetCapabilitiesPolicy.ElementCall,
+        capabilitiesPolicy: MatrixWidgetCapabilitiesPolicy,
     ): Result<MatrixWidgetDriver>
 
     /**

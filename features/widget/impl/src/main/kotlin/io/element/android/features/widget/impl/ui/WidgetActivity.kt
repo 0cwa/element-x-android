@@ -82,7 +82,6 @@ class WidgetActivity :
                 val state = presenter.present()
                 WidgetScreenView(
                     state = state,
-                    onConsoleMessage = {},
                     requestPermissions = { permissions, callback ->
                         if (requestPermissionCallback != null) {
                             callback(emptyArray())

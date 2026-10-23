@@ -12,7 +12,7 @@ sealed interface MatrixWidgetCapabilitiesPolicy {
     /** The existing trusted Call flow; never use this policy for arbitrary room widgets. */
     data object ElementCall : MatrixWidgetCapabilitiesPolicy
 
-    /** Safe default for hosts that have no interactive permission UI. */
+    /** Deny negotiated Matrix capabilities when the host has no interactive permission UI. */
     data object DenyAll : MatrixWidgetCapabilitiesPolicy
 
     /**

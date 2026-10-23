@@ -37,7 +37,7 @@ internal class RustWidgetCapabilitiesProvider(
     }
 }
 
-internal fun deniedWidgetCapabilities() = WidgetCapabilities(
+private fun deniedWidgetCapabilities() = WidgetCapabilities(
     read = emptyList(),
     send = emptyList(),
     requiresClient = false,

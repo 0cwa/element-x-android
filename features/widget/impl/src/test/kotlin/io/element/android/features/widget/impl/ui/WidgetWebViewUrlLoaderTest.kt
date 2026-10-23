@@ -13,16 +13,6 @@ import org.junit.Test
 
 class WidgetWebViewUrlLoaderTest {
     @Test
-    fun `recomposition loads the requested URL only once`() {
-        val loads = mutableListOf<String>()
-        val loader = WidgetWebViewUrlLoader { loads += it }
-
-        repeat(3) { loader.update(AsyncData.Success(WIDGET_URL)) }
-
-        assertThat(loads).containsExactly(WIDGET_URL)
-    }
-
-    @Test
     fun `widget redirects and fragment navigation survive host state updates`() {
         var browserUrl = ""
         val loader = WidgetWebViewUrlLoader { browserUrl = it }
@@ -32,7 +22,7 @@ class WidgetWebViewUrlLoaderTest {
         browserUrl = navigatedUrl
 
         // Opening or dismissing a native permission dialog recomposes AndroidView.
-        loader.update(AsyncData.Success(WIDGET_URL))
+        repeat(3) { loader.update(AsyncData.Success(WIDGET_URL)) }
 
         assertThat(browserUrl).isEqualTo(navigatedUrl)
     }

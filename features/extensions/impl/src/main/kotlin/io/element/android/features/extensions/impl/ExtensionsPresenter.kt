@@ -57,8 +57,9 @@ class ExtensionsPresenter(
                         hasLoadError.value = false
                         isLoading.value = false
                     }
-                    .onFailure { error ->
-                        Timber.e(error, "Failed to fetch widget state events")
+                    .onFailure {
+                        // Parsing failures can include private room state in their exception messages.
+                        Timber.e("Failed to fetch widget state events")
                         if (extensions.value.isEmpty()) {
                             hasLoadError.value = true
                         }
@@ -106,7 +107,7 @@ internal fun parseWidgetStateEvent(
 ): ExtensionItem? {
     return try {
         val jsonObject = JSONObject(event.contentJson)
-        val type = jsonObject.nonBlankString("type") ?: return null
+        if (jsonObject.nonBlankString("type") == null) return null
         val url = jsonObject.nonBlankString("url") ?: return null
         if (widgetOrigin(url) == null) return null
         val name = jsonObject.nonBlankString("name")
@@ -116,14 +117,14 @@ internal fun parseWidgetStateEvent(
             widgetId = event.stateKey,
             eventId = event.eventId?.value,
             creatorUserId = event.sender.value,
-            type = type,
             name = name,
             avatarUrl = avatarUrl,
             url = url,
             waitForIframeLoad = jsonObject.opt("waitForIframeLoad") as? Boolean ?: true,
         )
-    } catch (e: Exception) {
-        Timber.e(e, "Failed to parse widget state event")
+    } catch (_: Exception) {
+        // JSON exceptions can include the widget URL or other private content.
+        Timber.e("Failed to parse widget state event")
         null
     }
 }

@@ -11,7 +11,6 @@ data class ExtensionItem(
     val widgetId: String,
     val eventId: String?,
     val creatorUserId: String,
-    val type: String,
     val name: String?,
     val avatarUrl: String?,
     val url: String,

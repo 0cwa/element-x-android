@@ -85,6 +85,8 @@ class WidgetScreenPresenter(
         val driverClosed = remember { AtomicBoolean(false) }
         val suppressedOpenIdPendingRequestIds = remember { mutableSetOf<String>() }
         val syntheticOpenIdRequestIds = remember { mutableSetOf<String>() }
+        var pendingOpenIdRequest by remember { mutableStateOf<PendingOpenIdRequest?>(null) }
+        var isClosing by remember { mutableStateOf(false) }
 
         fun closeDriver(driver: MatrixWidgetDriver?) {
             if (driver != null && driverClosed.compareAndSet(false, true)) {
@@ -93,6 +95,8 @@ class WidgetScreenPresenter(
         }
 
         fun closeScreen() {
+            isClosing = true
+            pendingOpenIdRequest = null
             capabilityConsent.close()
             closeDriver(widgetDriver.value)
             navigator.close()
@@ -100,6 +104,8 @@ class WidgetScreenPresenter(
 
         DisposableEffect(Unit) {
             onDispose {
+                isClosing = true
+                pendingOpenIdRequest = null
                 capabilityConsent.close()
                 closeDriver(widgetDriver.value)
             }
@@ -110,7 +116,6 @@ class WidgetScreenPresenter(
         var isDriverReady by remember { mutableStateOf(false) }
         var webViewError by remember { mutableStateOf<String?>(null) }
         var preloadPermission by remember { mutableStateOf<WidgetPreloadPermission>(WidgetPreloadPermission.Checking) }
-        var pendingOpenIdRequest by remember { mutableStateOf<PendingOpenIdRequest?>(null) }
         val languageTag = languageTagProvider.provideLanguageTag()
         val theme = if (ElementTheme.isLightTheme) "light" else "dark"
         val widgetOrigin = remember(widgetActivityData.url) { widgetOrigin(widgetActivityData.url) }
@@ -181,7 +186,7 @@ class WidgetScreenPresenter(
                             // The SDK treats fromWidget messages as requests even when they include a response field.
                             // Invalid OpenID commands must not fall through to the unapproved SDK relay.
                             val openIdRequest = parseOpenIdRequest(message) ?: return@onEach
-                            if (pendingOpenIdRequest == null) {
+                            if (!isClosing && pendingOpenIdRequest == null) {
                                 interceptor.sendMessage(openIdInitialResponse(message, OPEN_ID_REQUEST))
                                 pendingOpenIdRequest = openIdRequest
                             } else {
@@ -227,18 +232,19 @@ class WidgetScreenPresenter(
                         preloadPermission = WidgetPreloadPermission.Allowed
                     }
                 }
-                is WidgetScreenEvents.GrantOpenIdPermission -> {
+                is WidgetScreenEvents.RespondToOpenId -> {
                     val request = pendingOpenIdRequest ?: return
+                    if (isClosing || request.approvalId != event.requestId) return
+                    val interceptor = messageInterceptor.value ?: return
                     pendingOpenIdRequest = null
-                    suppressedOpenIdPendingRequestIds += request.requestId
-                    coroutineScope.launch {
-                        widgetDriver.value?.send(request.rawMessage)
-                    }
-                }
-                is WidgetScreenEvents.DenyOpenIdPermission -> {
-                    val request = pendingOpenIdRequest ?: return
-                    pendingOpenIdRequest = null
-                    messageInterceptor.value?.let { interceptor ->
+                    if (event.allowed) {
+                        coroutineScope.launch {
+                            if (!isClosing && messageInterceptor.value === interceptor) {
+                                suppressedOpenIdPendingRequestIds += request.requestId
+                                widgetDriver.value?.send(request.rawMessage)
+                            }
+                        }
+                    } else {
                         val (requestId, blockedMessage) = blockedOpenIdCredentialsMessage(
                             widgetId = widgetActivityData.widgetId,
                             originalRequestId = request.requestId,
@@ -251,6 +257,8 @@ class WidgetScreenPresenter(
                     capabilityConsent.respond(event.requestId, event.allowed)
                 }
                 is WidgetScreenEvents.Close -> {
+                    isClosing = true
+                    pendingOpenIdRequest = null
                     capabilityConsent.close()
                     val widgetId = widgetDriver.value?.id
                     val interceptor = messageInterceptor.value
@@ -299,7 +307,7 @@ class WidgetScreenPresenter(
             webViewError = webViewError,
             userAgent = userAgent,
             isWidgetLoaded = isWidgetLoaded,
-            isOpenIdPermissionRequired = pendingOpenIdRequest != null,
+            openIdRequestId = pendingOpenIdRequest?.approvalId,
             capabilityRequest = capabilityRequest,
             widgetName = widgetActivityData.widgetName,
             eventSink = ::handleEvent,
@@ -388,7 +396,7 @@ class WidgetScreenPresenter(
             if (json.has("response")) return@runCatchingExceptions null
             val requestId = (json.opt("requestId") as? String)?.takeIf { it.isNotBlank() }
                 ?: return@runCatchingExceptions null
-            PendingOpenIdRequest(rawMessage = message, requestId = requestId)
+            PendingOpenIdRequest(rawMessage = message, requestId = requestId, approvalId = UUID.randomUUID().toString())
         }.getOrNull()
     }
 
@@ -460,6 +468,8 @@ class WidgetScreenPresenter(
 private data class PendingOpenIdRequest(
     val rawMessage: String,
     val requestId: String,
+    // A widget can reuse its protocol request ID; native approval must still identify this exact prompt.
+    val approvalId: String,
 )
 
 /** Only Matrix media URLs may be loaded in the widget's pre-consent UI. */

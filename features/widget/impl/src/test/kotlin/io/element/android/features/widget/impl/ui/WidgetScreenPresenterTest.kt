@@ -277,7 +277,7 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             interceptor.givenInterceptedMessage(request)
             runCurrent()
 
-            assertThat(state.isOpenIdPermissionRequired).isFalse()
+            assertThat(state.openIdRequestId).isNull()
             assertThat(interceptor.sentMessages).isEmpty()
             assertThat(driver.sentMessages).isEmpty()
             cancelAndIgnoreRemainingEvents()
@@ -322,11 +322,11 @@ class WidgetScreenPresenterTest : RobolectricTest() {
 
             interceptor.givenInterceptedMessage(validRequest)
             runCurrent()
-            while (!state.isOpenIdPermissionRequired) {
+            while (state.openIdRequestId == null) {
                 state = awaitItem()
             }
             assertThat(driver.sentMessages).isEmpty()
-            state.eventSink(WidgetScreenEvents.GrantOpenIdPermission)
+            state.eventSink(WidgetScreenEvents.RespondToOpenId(requireNotNull(state.openIdRequestId), true))
             runCurrent()
             assertThat(driver.sentMessages).containsExactly(validRequest)
             cancelAndIgnoreRemainingEvents()
@@ -356,7 +356,7 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             interceptor.givenInterceptedMessage(request)
             runCurrent()
 
-            while (!state.isOpenIdPermissionRequired) {
+            while (state.openIdRequestId == null) {
                 state = awaitItem()
             }
             assertThat(driver.sentMessages).isEmpty()
@@ -364,7 +364,7 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             assertThat(JSONObject(interceptor.sentMessages.single()).getJSONObject("response").getString("state"))
                 .isEqualTo("request")
 
-            state.eventSink(WidgetScreenEvents.GrantOpenIdPermission)
+            state.eventSink(WidgetScreenEvents.RespondToOpenId(requireNotNull(state.openIdRequestId), true))
             runCurrent()
 
             assertThat(driver.sentMessages).containsExactly(request)
@@ -432,10 +432,10 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             interceptor.givenInterceptedMessage(request)
             runCurrent()
 
-            while (!state.isOpenIdPermissionRequired) {
+            while (state.openIdRequestId == null) {
                 state = awaitItem()
             }
-            state.eventSink(WidgetScreenEvents.DenyOpenIdPermission)
+            state.eventSink(WidgetScreenEvents.RespondToOpenId(requireNotNull(state.openIdRequestId), false))
             runCurrent()
 
             assertThat(driver.sentMessages).isEmpty()
@@ -452,6 +452,50 @@ class WidgetScreenPresenterTest : RobolectricTest() {
             runCurrent()
 
             assertThat(driver.sentMessages).isEmpty()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `stale OpenID dialog responses cannot answer a replacement bridge request`() = runTest {
+        val driver = FakeMatrixWidgetDriver(id = "widget-id")
+        val presenter = createWidgetScreenPresenter(
+            data = aWidgetActivityData(creatorUserId = A_SESSION_ID.value),
+            widgetProvider = FakeWidgetProvider(driver = driver),
+        )
+        val firstInterceptor = FakeWidgetMessageInterceptor()
+        val secondInterceptor = FakeWidgetMessageInterceptor()
+        // Reusing the widget's protocol ID must not reuse its native approval.
+        val request = """{"api":"fromWidget","widgetId":"widget-id","requestId":"openid-1","action":"get_openid","data":{}}"""
+
+        presenter.test {
+            var state = awaitItem()
+            while (state.urlState !is AsyncData.Success) state = awaitItem()
+            state.eventSink(WidgetScreenEvents.SetMessageInterceptor(firstInterceptor))
+            runCurrent()
+            firstInterceptor.givenInterceptedMessage(request)
+            runCurrent()
+            while (state.openIdRequestId == null) state = awaitItem()
+            val oldApprovalId = requireNotNull(state.openIdRequestId)
+
+            state.eventSink(WidgetScreenEvents.SetMessageInterceptor(secondInterceptor))
+            runCurrent()
+            secondInterceptor.givenInterceptedMessage(request)
+            runCurrent()
+            do {
+                state = awaitItem()
+            } while (state.openIdRequestId == null || state.openIdRequestId == oldApprovalId)
+            val newApprovalId = requireNotNull(state.openIdRequestId)
+
+            state.eventSink(WidgetScreenEvents.RespondToOpenId(oldApprovalId, true))
+            state.eventSink(WidgetScreenEvents.RespondToOpenId(oldApprovalId, false))
+            runCurrent()
+            assertThat(driver.sentMessages).isEmpty()
+            assertThat(secondInterceptor.sentMessages).hasSize(1)
+
+            state.eventSink(WidgetScreenEvents.RespondToOpenId(newApprovalId, true))
+            runCurrent()
+            assertThat(driver.sentMessages).containsExactly(request)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -486,7 +530,7 @@ class WidgetScreenPresenterTest : RobolectricTest() {
     }
 
     @Test
-    fun `closing a loaded widget sends close message before shutdown`() = runTest {
+    fun `closing a loaded widget cancels identity consent before graceful shutdown`() = runTest {
         val driver = FakeMatrixWidgetDriver(id = "widget-id")
         val provider = FakeWidgetProvider(driver = driver)
         val navigator = FakeWidgetScreenNavigator()
@@ -512,11 +556,26 @@ class WidgetScreenPresenterTest : RobolectricTest() {
                 state = awaitItem()
             } while (!state.isWidgetLoaded)
 
+            val openIdRequest = """{"api":"fromWidget","widgetId":"widget-id","requestId":"openid-close","action":"get_openid","data":{}}"""
+            interceptor.givenInterceptedMessage(openIdRequest)
+            runCurrent()
+            while (state.openIdRequestId == null) state = awaitItem()
+            val approvalId = requireNotNull(state.openIdRequestId)
             state.eventSink(WidgetScreenEvents.Close)
+            runCurrent()
+            while (state.openIdRequestId != null) state = awaitItem()
 
-            assertThat(interceptor.sentMessages).hasSize(1)
-            assertThat(interceptor.sentMessages.single()).contains("\"action\":\"io.element.close\"")
-            assertThat(interceptor.sentMessages.single()).contains("\"api\":\"toWidget\"")
+            assertThat(interceptor.sentMessages).hasSize(2)
+            assertThat(interceptor.sentMessages.last()).contains("\"action\":\"io.element.close\"")
+            assertThat(interceptor.sentMessages.last()).contains("\"api\":\"toWidget\"")
+            assertThat(navigator.closeCalled).isFalse()
+
+            state.eventSink(WidgetScreenEvents.RespondToOpenId(approvalId, true))
+            interceptor.givenInterceptedMessage(openIdRequest)
+            runCurrent()
+            assertThat(driver.sentMessages).doesNotContain(openIdRequest)
+            assertThat(JSONObject(interceptor.sentMessages.last()).getJSONObject("response").getString("state"))
+                .isEqualTo("blocked")
 
             advanceTimeBy(2.seconds)
             runCurrent()

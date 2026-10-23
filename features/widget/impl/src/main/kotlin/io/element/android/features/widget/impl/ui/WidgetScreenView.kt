@@ -63,7 +63,6 @@ typealias RequestPermissionCallback = (Array<String>) -> Unit
 @Composable
 internal fun WidgetScreenView(
     state: WidgetScreenState,
-    onConsoleMessage: (ConsoleMessage) -> Unit,
     requestPermissions: (Array<String>, RequestPermissionCallback) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -124,7 +123,6 @@ internal fun WidgetScreenView(
                     userAgent = state.userAgent,
                     onPermissionsRequest = mediaPermissions::receive,
                     onPermissionsRequestCancel = mediaPermissions::cancel,
-                    onConsoleMessage = onConsoleMessage,
                     onCreateWebView = { webView ->
                         val interceptor = WebViewWidgetMessageInterceptor(
                             webView = webView,
@@ -147,7 +145,7 @@ internal fun WidgetScreenView(
                     is AsyncData.Loading ->
                         ProgressDialog(text = stringResource(id = CommonStrings.common_please_wait))
                     is AsyncData.Failure -> {
-                        Timber.e(state.urlState.error, "WebView failed to load URL: ${state.urlState.error.message}")
+                        Timber.e("Widget URL could not be loaded")
                         ErrorDialog(
                             content = state.urlState.error.message.orEmpty(),
                             onSubmit = { state.eventSink(WidgetScreenEvents.Close) },
@@ -160,6 +158,7 @@ internal fun WidgetScreenView(
     }
 
     val capabilityRequest = state.capabilityRequest
+    val openIdRequestId = state.openIdRequestId
     if (capabilityRequest != null) {
         WidgetCapabilityDialog(
             request = capabilityRequest,
@@ -168,7 +167,7 @@ internal fun WidgetScreenView(
                 state.eventSink(WidgetScreenEvents.RespondToCapabilities(capabilityRequest.id, allowed))
             },
         )
-    } else if (state.isOpenIdPermissionRequired) {
+    } else if (openIdRequestId != null) {
         ConfirmationDialog(
             title = stringResource(R.string.screen_widget_openid_permission_title),
             content = stringResource(
@@ -177,10 +176,10 @@ internal fun WidgetScreenView(
             ),
             submitText = stringResource(CommonStrings.action_continue),
             onSubmitClick = {
-                state.eventSink(WidgetScreenEvents.GrantOpenIdPermission)
+                state.eventSink(WidgetScreenEvents.RespondToOpenId(openIdRequestId, true))
             },
             onDismiss = {
-                state.eventSink(WidgetScreenEvents.DenyOpenIdPermission)
+                state.eventSink(WidgetScreenEvents.RespondToOpenId(openIdRequestId, false))
             },
         )
     } else {
@@ -277,7 +276,6 @@ private fun WidgetWebView(
     userAgent: String,
     onPermissionsRequest: (PermissionRequest) -> Unit,
     onPermissionsRequestCancel: (PermissionRequest) -> Unit,
-    onConsoleMessage: (ConsoleMessage) -> Unit,
     onCreateWebView: (WebView) -> Boolean,
     onDestroyWebView: (WebView) -> Unit,
     modifier: Modifier = Modifier,
@@ -296,7 +294,6 @@ private fun WidgetWebView(
                             userAgent = userAgent,
                             onPermissionsRequested = onPermissionsRequest,
                             onPermissionsRequestCanceled = onPermissionsRequestCancel,
-                            onConsoleMessage = onConsoleMessage,
                         )
                         tag = WidgetWebViewUrlLoader(::loadUrl)
                     }
@@ -321,7 +318,6 @@ private fun WebView.setup(
     userAgent: String,
     onPermissionsRequested: (PermissionRequest) -> Unit,
     onPermissionsRequestCanceled: (PermissionRequest) -> Unit,
-    onConsoleMessage: (ConsoleMessage) -> Unit,
 ) {
     layoutParams = ViewGroup.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -348,7 +344,7 @@ private fun WebView.setup(
         }
 
         override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-            onConsoleMessage(consoleMessage)
+            // Widget console output can contain user data; consume it without logging.
             return true
         }
     }
@@ -362,6 +358,5 @@ internal fun WidgetScreenViewPreview(
     WidgetScreenView(
         state = state,
         requestPermissions = { _, _ -> },
-        onConsoleMessage = {},
     )
 }

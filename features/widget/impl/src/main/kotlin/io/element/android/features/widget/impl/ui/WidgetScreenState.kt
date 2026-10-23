@@ -17,7 +17,7 @@ data class WidgetScreenState(
     val webViewError: String?,
     val userAgent: String,
     val isWidgetLoaded: Boolean,
-    val isOpenIdPermissionRequired: Boolean,
+    val openIdRequestId: String?,
     val widgetName: String,
     val eventSink: (WidgetScreenEvents) -> Unit,
     val capabilityRequest: WidgetCapabilityConsent.Request?,

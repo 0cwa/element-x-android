@@ -94,7 +94,7 @@ class WebViewWidgetMessageInterceptor(
                                 return "{Failed to stringify object}";
                               }
                             }
-    
+
                             function logFn(consoleLogFn, ...args) {
                                 consoleLogFn(
                                     args.map(

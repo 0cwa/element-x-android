@@ -27,6 +27,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
+import timber.log.Timber
 
 class ExtensionsPresenterTest : RobolectricTest() {
     @Test
@@ -133,27 +134,43 @@ class ExtensionsPresenterTest : RobolectricTest() {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun `initial discovery failure is surfaced instead of looking empty`() = runTest {
+    fun `initial discovery failure is surfaced without logging private content`() = runTest {
+        val privateContent = "PRIVATE_WIDGET_CONTENT"
+        val logs = mutableListOf<String>()
+        val tree = object : Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                logs += message
+                t?.let { logs += it.stackTraceToString() }
+            }
+        }
         val presenter = ExtensionsPresenter(
             room = FakeJoinedRoom(),
-            roomStateEventProvider = FailingRoomStateEventProvider(),
+            roomStateEventProvider = FailingRoomStateEventProvider(IllegalStateException(privateContent)),
             widgetEntryPoint = RecordingWidgetEntryPoint(),
         )
         var latestState: ExtensionsState? = null
 
-        val job = launch {
-            moleculeFlow(RecompositionMode.Immediate) {
-                presenter.present()
-            }.collect { latestState = it }
+        Timber.plant(tree)
+        try {
+            val malformedEvent = aWidgetStateEvent(content = """{"url":"https://widget.example/?secret=$privateContent""")
+            assertThat(parseWidgetStateEvent(malformedEvent)).isNull()
+
+            backgroundScope.launch {
+                moleculeFlow(RecompositionMode.Immediate) {
+                    presenter.present()
+                }.collect { latestState = it }
+            }
+            runCurrent()
+
+            val state = checkNotNull(latestState)
+            assertThat(state.isLoading).isFalse()
+            assertThat(state.hasLoadError).isTrue()
+            assertThat(state.extensions).isEmpty()
+            assertThat(logs).isNotEmpty()
+            assertThat(logs.joinToString()).doesNotContain(privateContent)
+        } finally {
+            Timber.uproot(tree)
         }
-
-        runCurrent()
-
-        val state = checkNotNull(latestState)
-        assertThat(state.isLoading).isFalse()
-        assertThat(state.hasLoadError).isTrue()
-        assertThat(state.extensions).isEmpty()
-        job.cancelAndJoin()
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -244,12 +261,12 @@ class ExtensionsPresenterTest : RobolectricTest() {
         }
     }
 
-    private class FailingRoomStateEventProvider : RoomStateEventProvider {
+    private class FailingRoomStateEventProvider(private val failure: Throwable) : RoomStateEventProvider {
         override suspend fun getStateEvents(
             sessionId: SessionId,
             roomId: RoomId,
             eventType: String,
-        ): Result<List<RoomStateEvent>> = Result.failure(IllegalStateException("boom"))
+        ): Result<List<RoomStateEvent>> = Result.failure(failure)
     }
 
     private class RecordingWidgetEntryPoint : WidgetEntryPoint {
