@@ -170,6 +170,13 @@ enum class FeatureFlags(
         isFinished = false,
         isInLabs = false,
     ),
+    Extensions(
+        key = "feature.extensions",
+        title = "Room extensions",
+        description = "Allow opening room widgets from room details.",
+        defaultValue = { false },
+        isFinished = false,
+    ),
     NativeCall(
         key = "feature.native_call",
         title = "Native calls (experimental)",

@@ -83,5 +83,6 @@ enum class AvatarSize(val dp: Dp) {
     AccountItem(32.dp),
     OtherAccountItem(20.dp),
     LocationPin(32.dp),
+    ExtensionsListItem(32.dp),
     ActiveCallItem(20.dp)
 }
