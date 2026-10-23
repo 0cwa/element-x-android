@@ -29,6 +29,8 @@ import io.element.android.libraries.androidutils.system.startSharePlainTextInten
 import io.element.android.libraries.architecture.appyx.launchMolecule
 import io.element.android.libraries.architecture.callback
 import io.element.android.libraries.di.RoomScope
+import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.notification.CallIntent
 import io.element.android.libraries.matrix.api.room.BaseRoom
@@ -48,6 +50,7 @@ class RoomDetailsNode(
     private val analyticsService: AnalyticsService,
     private val leaveRoomRenderer: LeaveRoomRenderer,
     private val roomDetailsExtension: RoomDetailsExtension,
+    private val featureFlagService: FeatureFlagService,
 ) : Node(buildContext, plugins = plugins), RoomDetailsNavigator {
     interface Callback : Plugin {
         fun navigateBack()
@@ -66,6 +69,7 @@ class RoomDetailsNode(
         fun navigateToRoomCall(callIntent: CallIntent)
         fun navigateToReportRoom()
         fun navigateToSelectNewOwnersWhenLeaving()
+        fun navigateToExtensions()
     }
 
     private val presenter = presenterFactory.create(this)
@@ -104,6 +108,7 @@ class RoomDetailsNode(
     override fun View(modifier: Modifier) {
         val context = LocalContext.current
         val state by stateFlow.collectAsState()
+        val showExtensions by featureFlagService.isFeatureEnabledFlow(FeatureFlags.Extensions).collectAsState(initial = false)
 
         fun onShareRoom() {
             lifecycleScope.onShareRoom(context)
@@ -123,6 +128,7 @@ class RoomDetailsNode(
         RoomDetailsView(
             state = state,
             additionalSections = { with(roomDetailsExtension) { Render(Modifier) } },
+            openExtensions = if (showExtensions) callback::navigateToExtensions else null,
             modifier = modifier,
             goBack = ::navigateUp,
             onActionClick = ::onActionClick,
