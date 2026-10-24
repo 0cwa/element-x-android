@@ -1,5 +1,13 @@
 # Widget upstream preparation
 
+## October 24, 2026 — upstream synchronization and CI follow-up
+
+The upstream `develop` baseline has advanced from `cd3fb0d` to [`4b62a99`](https://github.com/element-hq/element-x-android/commit/4b62a99d925e5ecb051f635874bc47edc43b59e7), including Rust SDK `26.10.23` and Element X `26.10.1`. The fork `develop` and every *existing fork review PR* (#4, #5, #6, #7, #8, #11, #12), as well as the canonical [#1 at `e9e1d390`](https://github.com/0cwa/element-x-android/pull/1), now contain that upstream commit. The five upstream-touched paths did not overlap the widget implementation. Exact incremental feature file sets were rechecked.
+
+The independent upstream candidate commits A–K listed below remain **intentionally immutable** for surgical cherry-picks and exact incremental diffs; these are not themselves up-to-date exported upstream PR branches. A new [`validate/widget-upstream-2026-10-24`](https://github.com/0cwa/element-x-android/tree/validate/widget-upstream-2026-10-24) branch contains the *final prepared feature-disabled tree* merged with the current upstream base. There are still **no upstream PRs**.
+
+All eight refreshed fork PR heads triggered GitHub Actions on October 24; the latest-revision builds, tests, coverage and Maestro results need fresh verification. The previous canonical `34f85ef` run passed APK builds, quality and unit/screenshot tests; its Codecov upload **succeeded on the retry** (HTTP 200 at 00:42 UTC). Maestro on that revision could not begin app assertions because `MATRIX_MAESTRO_ACCOUNT_PASSWORD` was unavailable. That is a fork CI credential/setup blocker, not evidence of an app failure. A fork-base PR-checks concurrency correction was also committed separately to `develop` so different PRs no longer cancel each other's metadata checks. Fork `develop` push jobs still require private upstream enterprise-submodule SSH secrets; PR-triggered checks skip those unavailable secrets and remain the relevant code validation.
+
 This fork-only guide records the audit and branch preparation on 23 October 2026. **No new pull requests have been opened.** The existing fork review stack and its history are preserved.
 
 The audited testing integration is [`widget-support` at `34f85ef`](https://github.com/0cwa/element-x-android/commit/34f85efbf8c6ca31bd9927b9c40b66ab4c05930c). All preparation branches use upstream [`develop` at `cd3fb0d`](https://github.com/element-hq/element-x-android/commit/cd3fb0ddca6961e0a262b9620aab07d3572598c3) as their common source base.
