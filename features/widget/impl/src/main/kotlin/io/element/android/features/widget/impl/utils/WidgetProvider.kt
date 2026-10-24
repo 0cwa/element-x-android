@@ -9,6 +9,7 @@ package io.element.android.features.widget.impl.utils
 
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.SessionId
+import io.element.android.libraries.matrix.api.widget.MatrixWidgetCapabilitiesPolicy
 import io.element.android.libraries.matrix.api.widget.MatrixWidgetDriver
 
 interface WidgetProvider {
@@ -21,6 +22,7 @@ interface WidgetProvider {
         initAfterContentLoad: Boolean,
         languageTag: String?,
         theme: String?,
+        capabilitiesPolicy: MatrixWidgetCapabilitiesPolicy = MatrixWidgetCapabilitiesPolicy.DenyAll,
     ): Result<GetWidgetResult>
 
     data class GetWidgetResult(

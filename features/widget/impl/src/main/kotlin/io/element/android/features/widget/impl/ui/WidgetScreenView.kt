@@ -174,7 +174,16 @@ internal fun WidgetScreenView(
         }
     }
 
-    if (state.isOpenIdPermissionRequired) {
+    val capabilityRequest = state.capabilityRequest
+    if (capabilityRequest != null) {
+        WidgetCapabilityDialog(
+            request = capabilityRequest,
+            origin = state.widgetOrigin ?: state.widgetName,
+            onRespond = { allowed ->
+                state.eventSink(WidgetScreenEvents.RespondToCapabilities(capabilityRequest.id, allowed))
+            },
+        )
+    } else if (state.isOpenIdPermissionRequired) {
         ConfirmationDialog(
             title = stringResource(R.string.screen_widget_openid_permission_title),
             content = stringResource(

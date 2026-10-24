@@ -7,6 +7,7 @@
 
 package io.element.android.features.widget.impl.ui
 
+import io.element.android.features.widget.impl.permissions.WidgetCapabilityConsent
 import io.element.android.libraries.architecture.AsyncData
 
 data class WidgetScreenState(
@@ -19,4 +20,5 @@ data class WidgetScreenState(
     val isOpenIdPermissionRequired: Boolean,
     val widgetName: String,
     val eventSink: (WidgetScreenEvents) -> Unit,
+    val capabilityRequest: WidgetCapabilityConsent.Request?,
 )
