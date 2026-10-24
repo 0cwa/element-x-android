@@ -13,6 +13,7 @@ import com.bumble.appyx.core.modality.BuildContext
 import com.bumble.appyx.testing.junit4.util.MainDispatcherRule
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.call.test.FakeElementCallEntryPoint
+import io.element.android.features.extensions.test.FakeExtensionsEntryPoint
 import io.element.android.features.knockrequests.test.FakeKnockRequestsListEntryPoint
 import io.element.android.features.messages.test.FakeMessagesEntryPoint
 import io.element.android.features.poll.test.history.FakePollHistoryEntryPoint
@@ -53,6 +54,7 @@ class DefaultRoomDetailsEntryPointTest {
                 plugins = plugins,
                 pollHistoryEntryPoint = FakePollHistoryEntryPoint(),
                 elementCallEntryPoint = FakeElementCallEntryPoint(),
+                extensionsEntryPoint = FakeExtensionsEntryPoint(),
                 room = FakeJoinedRoom(),
                 analyticsService = FakeAnalyticsService(),
                 messagesEntryPoint = FakeMessagesEntryPoint(),
