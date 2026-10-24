@@ -28,6 +28,7 @@ import io.element.android.features.widget.impl.DefaultWidgetEntryPoint
 import io.element.android.features.widget.impl.di.WidgetBindings
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.architecture.bindings
+import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.core.log.logger.LoggerTag
 import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.designsystem.theme.ElementThemeApp
@@ -83,8 +84,16 @@ class WidgetActivity :
                     state = state,
                     onConsoleMessage = {},
                     requestPermissions = { permissions, callback ->
-                        requestPermissionCallback = callback
-                        requestPermissionsLauncher.launch(permissions)
+                        if (requestPermissionCallback != null) {
+                            callback(emptyArray())
+                        } else {
+                            requestPermissionCallback = callback
+                            runCatchingExceptions { requestPermissionsLauncher.launch(permissions) }
+                                .onFailure {
+                                    requestPermissionCallback = null
+                                    callback(emptyArray())
+                                }
+                        }
                     }
                 )
             }
@@ -148,8 +157,8 @@ class WidgetActivity :
                     permissionsToGrant.add(webKitPermission)
                 }
             }
-            callback(permissionsToGrant.toTypedArray())
             requestPermissionCallback = null
+            callback(permissionsToGrant.toTypedArray())
         }
     }
 }
