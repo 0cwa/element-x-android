@@ -1,7 +1,7 @@
 # Maestro
 
-Maestro is a framework that we are using to test navigation across the application.
-To setup, please refer at [https://maestro.mobile.dev](https://maestro.mobile.dev)
+Maestro tests account sign-in, session verification and navigation across Element X.
+Install the CLI using the [Maestro documentation](https://docs.maestro.dev/).
 
 <!--- TOC -->
 
@@ -9,6 +9,8 @@ To setup, please refer at [https://maestro.mobile.dev](https://maestro.mobile.de
   * [Output](#output)
 * [Write test](#write-test)
 * [CI](#ci)
+  * [Account settings](#account-settings)
+  * [Run and troubleshoot](#run-and-troubleshoot)
 * [iOS](#ios)
 * [Future](#future)
 
@@ -16,25 +18,28 @@ To setup, please refer at [https://maestro.mobile.dev](https://maestro.mobile.de
 
 ## Run test
 
-From root dir of the project
+Run these commands in Bash from the repository root, with a debug APK installed on an emulator or device.
 
-*Note: Since Element X does not allow account creation, we have to use an existing account to run maestro test suite. So to run locally, please replace `user` and `123` with your test matrix.org account credentials, and `my room` with one of a room this account has joined. Note that the test will send messages to this room.*
+Use an existing dedicated test account on a Matrix Authentication Service (MAS) provider, such as matrix.org. Enable recovery for that account before running the suite, and supply its current recovery key. The account must have joined the configured test room and be able to send messages and polls there. The suite also creates temporary rooms and invites the two configured test users; use accounts and a room intended for this testing.
 
-```shell
-maestro test \
-    -e MAESTRO_APP_ID=io.element.android.x.debug \
-    -e MAESTRO_USERNAME=user1 \
-    -e MAESTRO_PASSWORD=123 \
-    -e MAESTRO_RECOVERY_KEY=ABC \
-    -e MAESTRO_ROOM_NAME="MyRoom" \
-    -e MAESTRO_INVITEE1_MXID=user2 \
-    -e MAESTRO_INVITEE2_MXID=user3 \
-    .maestro/allTests.yaml
+```bash
+export MAESTRO_APP_ID=io.element.android.x.debug
+export MAESTRO_USERNAME='@test-runner:matrix.org'
+export MAESTRO_ROOM_NAME='Maestro test room'
+export MAESTRO_INVITEE1_MXID='@test-peer-1:matrix.org'
+export MAESTRO_INVITEE2_MXID='@test-peer-2:matrix.org'
+read -r -s -p 'Test-account password: ' MAESTRO_PASSWORD; echo
+read -r -s -p 'Test-account recovery key: ' MAESTRO_RECOVERY_KEY; echo
+export MAESTRO_PASSWORD MAESTRO_RECOVERY_KEY
+source .github/workflows/scripts/maestro/prepare-env.sh
+maestro test .maestro/allTests.yaml
 ```
+
+The preparation script checks missing or empty settings and converts a full Matrix user ID into the username and account provider used by the MAS login form. A username without a provider defaults to matrix.org; set `MAESTRO_HOMESERVER` to use another MAS-backed provider. The suite currently tests password authentication, not SSO or CAPTCHA flows.
 
 ### Output
 
-Test result will be printed on the console, and screenshots will be generated at `./build/maestro`
+Maestro prints the result on the console and writes diagnostic files under `~/.maestro/tests`. Explicit screenshots use `build/maestro` names. Raw local diagnostics can contain entered credentials; use the CI sanitization script before sharing text diagnostics. CI uploads only redacted text and the suite's explicit screenshots, excluding recordings and automatic failure screenshots.
 
 ## Write test
 
@@ -52,8 +57,41 @@ Also, if updating the application code, do not forget to deploy again the applic
 
 ## CI
 
-The CI is running maestro using the workflow `.github/worflow/maestro.yaml` and [maestro cloud](https://cloud.mobile.dev/). For now we are limited to 100 runs a month.
-Some GitHub secrets are used to be able to do that: `MAESTRO_CLOUD_API_KEY`, for now api key from `benoitm@element.io` maestro cloud account, and `MATRIX_MAESTRO_ACCOUNT_PASSWORD` which is the password of the account `@maestroelement:matrix.org`. This account contains a room `MyRoom` to be able to run the maestro test suite.
+The [Maestro (local) workflow](../.github/workflows/maestro-local.yml) builds the debug APK and runs the suite on a GitHub-hosted Android emulator. It does not use Maestro Cloud or need a Maestro Cloud API key. A configuration job checks required settings before building the APK. Runs sharing the test account are queued to avoid interfering with each other.
+
+### Account settings
+
+In the repository's **Settings → Secrets and variables → Actions**, add the following settings. Passwords and recovery keys must be **Secrets**. The other account settings can be **Variables** or **Secrets**; a same-named secret takes precedence.
+
+| Name | Storage | Required value |
+| --- | --- | --- |
+| `MAESTRO_USERNAME` | Variable or secret | Test-account username or full `@user:server` Matrix ID. |
+| `MAESTRO_PASSWORD` | Secret | Password belonging to that same account. |
+| `MAESTRO_RECOVERY_KEY` | Secret | Current recovery key for that same account. |
+| `MAESTRO_ROOM_NAME` | Variable or secret | Exact displayed name of a joined, writable test room. |
+| `MAESTRO_INVITEE1_MXID` | Variable or secret | Full Matrix ID of the first test user to invite. |
+| `MAESTRO_INVITEE2_MXID` | Variable or secret | Full Matrix ID of a different test user to invite. |
+| `MAESTRO_HOMESERVER` | Variable or secret, optional | MAS-backed account provider. Derived from a full username, otherwise matrix.org. |
+| `MAESTRO_ENVIRONMENT` | Repository variable, optional | Name of the Actions environment containing these settings; defaults to `maestro`. |
+| `MAESTRO_CLEANUP_SESSIONS` | Variable, optional | Set to `true` only for a dedicated test account to terminate **all** its remaining MAS sessions after testing. Defaults to `false` on forks. |
+
+Existing `MATRIX_MAESTRO_ACCOUNT_PASSWORD` and `MATRIX_MAESTRO_ACCOUNT_RECOVERY_KEY` secrets remain accepted as fallbacks. `MATRIX_MAESTRO_ACCOUNT_USERNAME` is also accepted as a username alias. Prefer the `MAESTRO_*` names for new configuration. CI fixes `MAESTRO_APP_ID` to the debug APK it builds.
+
+If you added the settings under **Settings → Environments**, the jobs must select that exact environment. Set the repository variable `MAESTRO_ENVIRONMENT`, or choose the environment when manually running the workflow. Repository-level settings work without any environment-specific values. Existing environment protection rules still apply.
+
+Forks must configure their own account, room and invitees. The upstream repository retains its existing test-account defaults. The suite signs out its own session on success; broad session cleanup is optional on forks and uses the same resolved username, provider and password as the test.
+
+### Run and troubleshoot
+
+Open **Actions → Maestro (local) → Run workflow**, select the branch containing the changes, optionally select the configured environment, and run it. Pull requests whose head is in the same repository also run automatically. Pull requests from another repository are skipped because their secrets are unavailable.
+
+* **Check Maestro configuration fails:** the log names each missing or empty setting without printing its value. Check the exact names and selected environment. Passwords and recovery keys stored only as Variables are not read.
+* **Invalid credentials:** the MAS provider rejected the configured username/password pair. Check that both settings belong to the same test account and provider. This happens before recovery-key verification.
+* **Device verification fails:** confirm recovery was already enabled and the configured recovery key belongs to the account that just signed in.
+* **Room or invitee is not found:** check the exact displayed room name, room membership and full Matrix IDs. The suite needs two other test accounts.
+* **Inspecting a failed run:** download `test-results` for redacted text diagnostics and explicit screenshots. Raw recordings and automatic failure screenshots are excluded because text redaction cannot safely redact images.
+
+Re-run on the branch containing a workflow fix. Re-running an older workflow execution continues to use that execution's original code, even when account secrets have since been updated.
 
 ## iOS
 

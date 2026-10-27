@@ -9,6 +9,7 @@
 #
 
 COUNT=0
+trap 'exit 0' INT TERM
 mkdir -p /data/local/tmp/recordings;
 FILENAME=/data/local/tmp/recordings/testRecording$COUNT.mp4
 while true
