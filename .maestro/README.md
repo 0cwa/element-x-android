@@ -61,31 +61,31 @@ The [Maestro (local) workflow](../.github/workflows/maestro-local.yml) builds th
 
 ### Account settings
 
-In the repository's **Settings → Secrets and variables → Actions**, add the following settings. Passwords and recovery keys must be **Secrets**. The other account settings can be **Variables** or **Secrets**; a same-named secret takes precedence.
+In the repository's **Settings → Secrets and variables → Actions**, configure the username, password and recovery key as **Secrets**. Optional room, invitee and provider overrides can be **Variables** or **Secrets**; a same-named secret takes precedence.
 
 | Name | Storage | Required value |
 | --- | --- | --- |
-| `MAESTRO_USERNAME` | Variable or secret | Test-account username or full `@user:server` Matrix ID. |
+| `MAESTRO_USERNAME` | Secret | Test-account username or full `@user:server` Matrix ID. |
 | `MAESTRO_PASSWORD` | Secret | Password belonging to that same account. |
 | `MAESTRO_RECOVERY_KEY` | Secret | Current recovery key for that same account. |
-| `MAESTRO_ROOM_NAME` | Variable or secret | Exact displayed name of a joined, writable test room. |
-| `MAESTRO_INVITEE1_MXID` | Variable or secret | Full Matrix ID of the first test user to invite. |
-| `MAESTRO_INVITEE2_MXID` | Variable or secret | Full Matrix ID of a different test user to invite. |
+| `MAESTRO_ROOM_NAME` | Variable or secret, optional | Exact displayed name of a joined, writable test room; defaults to `MyRoom`. |
+| `MAESTRO_INVITEE1_MXID` | Variable or secret, optional | First test user to invite; defaults to `@maestroelement2:matrix.org`. |
+| `MAESTRO_INVITEE2_MXID` | Variable or secret, optional | Second test user to invite; defaults to `@maestroelement3:matrix.org`. |
 | `MAESTRO_HOMESERVER` | Variable or secret, optional | MAS-backed account provider. Derived from a full username, otherwise matrix.org. |
 | `MAESTRO_ENVIRONMENT` | Repository variable, optional | Name of the Actions environment containing these settings; defaults to `maestro`. |
 | `MAESTRO_CLEANUP_SESSIONS` | Variable, optional | Set to `true` only for a dedicated test account to terminate **all** its remaining MAS sessions after testing. Defaults to `false` on forks. |
 
-Existing `MATRIX_MAESTRO_ACCOUNT_PASSWORD` and `MATRIX_MAESTRO_ACCOUNT_RECOVERY_KEY` secrets remain accepted as fallbacks. `MATRIX_MAESTRO_ACCOUNT_USERNAME` is also accepted as a username alias. Room and invitee settings also accept the `MATRIX_MAESTRO_ACCOUNT_` or `MATRIX_MAESTRO_` prefix with the same suffix (`ROOM_NAME`, `INVITEE1_MXID`, `INVITEE2_MXID`). Prefer the `MAESTRO_*` names for new configuration. CI fixes `MAESTRO_APP_ID` to the debug APK it builds.
+Existing `MATRIX_MAESTRO_ACCOUNT_PASSWORD` and `MATRIX_MAESTRO_ACCOUNT_RECOVERY_KEY` secrets remain accepted as fallbacks. The username is read specifically from `secrets.MAESTRO_USERNAME`. Room and invitee overrides also accept the `MATRIX_MAESTRO_ACCOUNT_` or `MATRIX_MAESTRO_` prefix with the same suffix (`ROOM_NAME`, `INVITEE1_MXID`, `INVITEE2_MXID`). Prefer the `MAESTRO_*` names for new configuration. CI fixes `MAESTRO_APP_ID` to the debug APK it builds.
 
 If you added the settings under **Settings → Environments**, the jobs must select that exact environment. Set the repository variable `MAESTRO_ENVIRONMENT`, or choose the environment when manually running the workflow. Repository-level settings work without any environment-specific values. Existing environment protection rules still apply.
 
-Forks must configure their own account, room and invitees. The upstream repository retains its existing test-account defaults. The suite signs out its own session on success; broad session cleanup is optional on forks and uses the same resolved username, provider and password as the test.
+The configured account must already have joined `MyRoom`, or the room named by an override. No room or invitee settings are needed when using the defaults above. The suite signs out its own session on success; broad session cleanup is optional on forks and uses the same resolved username, provider and password as the test.
 
 ### Run and troubleshoot
 
 Open **Actions → Maestro (local) → Run workflow**, select the branch containing the changes, optionally select the configured environment, and run it. Pull requests whose head is in the same repository also run automatically. Pull requests from another repository are skipped because their secrets are unavailable.
 
-* **Check Maestro configuration fails:** the log names each missing or empty setting without printing its value. Check the exact names and selected environment. Passwords and recovery keys stored only as Variables are not read.
+* **Check Maestro configuration fails:** the log names each missing or empty setting without printing its value. Check the exact names and selected environment. Username, password and recovery key settings stored only as Variables are not read.
 * **Invalid credentials:** the MAS provider rejected the configured username/password pair. Check that both settings belong to the same test account and provider. This happens before recovery-key verification.
 * **Device verification fails:** confirm recovery was already enabled and the configured recovery key belongs to the account that just signed in.
 * **Room or invitee is not found:** check the exact displayed room name, room membership and full Matrix IDs. The suite needs two other test accounts.
