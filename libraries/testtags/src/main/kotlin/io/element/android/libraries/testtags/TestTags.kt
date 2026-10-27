@@ -115,6 +115,7 @@ object TestTags {
      * Timeline.
      */
     val timeline = TestTag("timeline")
+    val messagesRoomDetails = TestTag("messages-room_details")
 
     /**
      * Timeline item.

@@ -3,7 +3,12 @@ appId: ${MAESTRO_APP_ID}
 - tapOn: "Sign in manually"
 - runFlow: ../assertions/assertLoginDisplayed.yaml
 - takeScreenshot: build/maestro/100-SignIn
-# The account provider field defaults to matrix.org, so continue straight to the MAS login.
+# Select the configured MAS-backed account provider; local runs default to matrix.org.
+- tapOn:
+    id: "change_server-server"
+- eraseText
+- inputText: '${typeof MAESTRO_HOMESERVER === "undefined" || !MAESTRO_HOMESERVER ? "matrix.org" : MAESTRO_HOMESERVER}'
+- hideKeyboard
 - tapOn:
     id: "login-continue"
 ## MAS page
@@ -30,6 +35,11 @@ appId: ${MAESTRO_APP_ID}
 - inputText: ${MAESTRO_PASSWORD}
 - pressKey: Enter
 - tapOn: "Continue"
+## Report a rejected login immediately instead of timing out on a later native screen.
+- extendedWaitUntil:
+    visible: "Confirm your digital identity|Invalid credentials"
+    timeout: 60000
+- assertNotVisible: "Invalid credentials"
 ## Back to native world
 - runFlow: ../assertions/assertSessionVerificationDisplayed.yaml
 - runFlow: ./verifySession.yaml
