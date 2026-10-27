@@ -43,9 +43,9 @@ jobs:
           MAESTRO_USERNAME: ${{ secrets.MAESTRO_USERNAME || vars.MAESTRO_USERNAME || secrets.MATRIX_MAESTRO_ACCOUNT_USERNAME || vars.MATRIX_MAESTRO_ACCOUNT_USERNAME || (github.repository == 'element-hq/element-x-android' && 'maestroelement') || '' }}
           MAESTRO_PASSWORD: ${{ secrets.MAESTRO_PASSWORD || secrets.MATRIX_MAESTRO_ACCOUNT_PASSWORD }}
           MAESTRO_RECOVERY_KEY: ${{ secrets.MAESTRO_RECOVERY_KEY || secrets.MATRIX_MAESTRO_ACCOUNT_RECOVERY_KEY }}
-          MAESTRO_ROOM_NAME: ${{ secrets.MAESTRO_ROOM_NAME || vars.MAESTRO_ROOM_NAME || (github.repository == 'element-hq/element-x-android' && 'MyRoom') || '' }}
-          MAESTRO_INVITEE1_MXID: ${{ secrets.MAESTRO_INVITEE1_MXID || vars.MAESTRO_INVITEE1_MXID || (github.repository == 'element-hq/element-x-android' && '@maestroelement2:matrix.org') || '' }}
-          MAESTRO_INVITEE2_MXID: ${{ secrets.MAESTRO_INVITEE2_MXID || vars.MAESTRO_INVITEE2_MXID || (github.repository == 'element-hq/element-x-android' && '@maestroelement3:matrix.org') || '' }}
+          MAESTRO_ROOM_NAME: ${{ secrets.MAESTRO_ROOM_NAME || vars.MAESTRO_ROOM_NAME || secrets.MATRIX_MAESTRO_ACCOUNT_ROOM_NAME || vars.MATRIX_MAESTRO_ACCOUNT_ROOM_NAME || secrets.MATRIX_MAESTRO_ROOM_NAME || vars.MATRIX_MAESTRO_ROOM_NAME || (github.repository == 'element-hq/element-x-android' && 'MyRoom') || '' }}
+          MAESTRO_INVITEE1_MXID: ${{ secrets.MAESTRO_INVITEE1_MXID || vars.MAESTRO_INVITEE1_MXID || secrets.MATRIX_MAESTRO_ACCOUNT_INVITEE1_MXID || vars.MATRIX_MAESTRO_ACCOUNT_INVITEE1_MXID || secrets.MATRIX_MAESTRO_INVITEE1_MXID || vars.MATRIX_MAESTRO_INVITEE1_MXID || (github.repository == 'element-hq/element-x-android' && '@maestroelement2:matrix.org') || '' }}
+          MAESTRO_INVITEE2_MXID: ${{ secrets.MAESTRO_INVITEE2_MXID || vars.MAESTRO_INVITEE2_MXID || secrets.MATRIX_MAESTRO_ACCOUNT_INVITEE2_MXID || vars.MATRIX_MAESTRO_ACCOUNT_INVITEE2_MXID || secrets.MATRIX_MAESTRO_INVITEE2_MXID || vars.MATRIX_MAESTRO_INVITEE2_MXID || (github.repository == 'element-hq/element-x-android' && '@maestroelement3:matrix.org') || '' }}
           MAESTRO_HOMESERVER: ${{ secrets.MAESTRO_HOMESERVER || vars.MAESTRO_HOMESERVER }}
           MAESTRO_APP_ID: io.element.android.x.debug
           MAESTRO_CLEANUP_SESSIONS: ${{ vars.MAESTRO_CLEANUP_SESSIONS || (github.repository == 'element-hq/element-x-android' && 'true') || 'false' }}

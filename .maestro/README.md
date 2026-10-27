@@ -75,7 +75,7 @@ In the repository's **Settings → Secrets and variables → Actions**, add the 
 | `MAESTRO_ENVIRONMENT` | Repository variable, optional | Name of the Actions environment containing these settings; defaults to `maestro`. |
 | `MAESTRO_CLEANUP_SESSIONS` | Variable, optional | Set to `true` only for a dedicated test account to terminate **all** its remaining MAS sessions after testing. Defaults to `false` on forks. |
 
-Existing `MATRIX_MAESTRO_ACCOUNT_PASSWORD` and `MATRIX_MAESTRO_ACCOUNT_RECOVERY_KEY` secrets remain accepted as fallbacks. `MATRIX_MAESTRO_ACCOUNT_USERNAME` is also accepted as a username alias. Prefer the `MAESTRO_*` names for new configuration. CI fixes `MAESTRO_APP_ID` to the debug APK it builds.
+Existing `MATRIX_MAESTRO_ACCOUNT_PASSWORD` and `MATRIX_MAESTRO_ACCOUNT_RECOVERY_KEY` secrets remain accepted as fallbacks. `MATRIX_MAESTRO_ACCOUNT_USERNAME` is also accepted as a username alias. Room and invitee settings also accept the `MATRIX_MAESTRO_ACCOUNT_` or `MATRIX_MAESTRO_` prefix with the same suffix (`ROOM_NAME`, `INVITEE1_MXID`, `INVITEE2_MXID`). Prefer the `MAESTRO_*` names for new configuration. CI fixes `MAESTRO_APP_ID` to the debug APK it builds.
 
 If you added the settings under **Settings → Environments**, the jobs must select that exact environment. Set the repository variable `MAESTRO_ENVIRONMENT`, or choose the environment when manually running the workflow. Repository-level settings work without any environment-specific values. Existing environment protection rules still apply.
 
