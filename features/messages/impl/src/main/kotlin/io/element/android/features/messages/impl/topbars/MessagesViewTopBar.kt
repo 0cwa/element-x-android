@@ -55,6 +55,8 @@ import io.element.android.libraries.matrix.api.user.DisplayedStatus
 import io.element.android.libraries.matrix.ui.components.DisplayNameWithStatus
 import io.element.android.libraries.matrix.ui.components.aMatrixUserList
 import io.element.android.libraries.matrix.ui.model.getAvatarData
+import io.element.android.libraries.testtags.TestTags
+import io.element.android.libraries.testtags.testTag
 import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -86,6 +88,7 @@ internal fun MessagesViewTopBar(
                     .heightIn(min = 48.dp)
                     .clip(roundedCornerShape)
                     .clickable { onRoomDetailsClick() }
+                    .testTag(TestTags.messagesRoomDetails)
                     .semantics { heading() },
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
