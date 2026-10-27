@@ -56,7 +56,7 @@ prepare_maestro_environment() {
         fi
     done
     for name in "${settings[@]}"; do
-        export "$name"
+        export "$name=${!name}"
         if [[ -n "${GITHUB_ENV:-}" ]]; then
             printf '%s=%s\n' "$name" "${!name}" >> "$GITHUB_ENV" || return 1
         fi
