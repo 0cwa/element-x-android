@@ -1,10 +1,16 @@
-// This array contains all the required environment variable. When adding a variable, add it here also.
-// If a variable is missing, an error will occur.
+// Keep this list in sync with the environment variables required by the test suite.
+// Report variable names only; never include credentials in validation errors.
 
-if (MAESTRO_APP_ID == null) throw "Fatal: missing env variable MAESTRO_APP_ID"
-if (MAESTRO_USERNAME == null) throw "Fatal: missing env variable MAESTRO_USERNAME"
-if (MAESTRO_PASSWORD == null) throw "Fatal: missing env variable MAESTRO_PASSWORD"
-if (MAESTRO_RECOVERY_KEY == null) throw "Fatal: missing env variable MAESTRO_RECOVERY_KEY"
-if (MAESTRO_ROOM_NAME == null) throw "Fatal: missing env variable MAESTRO_ROOM_NAME"
-if (MAESTRO_INVITEE1_MXID == null) throw "Fatal: missing env variable MAESTRO_INVITEE1_MXID"
-if (MAESTRO_INVITEE2_MXID == null) throw "Fatal: missing env variable MAESTRO_INVITEE2_MXID"
+function requireEnv(name, value) {
+    if (value == null || String(value).trim() === "") {
+        throw "Fatal: missing or empty env variable " + name
+    }
+}
+
+requireEnv("MAESTRO_APP_ID", typeof MAESTRO_APP_ID === "undefined" ? null : MAESTRO_APP_ID)
+requireEnv("MAESTRO_USERNAME", typeof MAESTRO_USERNAME === "undefined" ? null : MAESTRO_USERNAME)
+requireEnv("MAESTRO_PASSWORD", typeof MAESTRO_PASSWORD === "undefined" ? null : MAESTRO_PASSWORD)
+requireEnv("MAESTRO_RECOVERY_KEY", typeof MAESTRO_RECOVERY_KEY === "undefined" ? null : MAESTRO_RECOVERY_KEY)
+requireEnv("MAESTRO_ROOM_NAME", typeof MAESTRO_ROOM_NAME === "undefined" ? null : MAESTRO_ROOM_NAME)
+requireEnv("MAESTRO_INVITEE1_MXID", typeof MAESTRO_INVITEE1_MXID === "undefined" ? null : MAESTRO_INVITEE1_MXID)
+requireEnv("MAESTRO_INVITEE2_MXID", typeof MAESTRO_INVITEE2_MXID === "undefined" ? null : MAESTRO_INVITEE2_MXID)
