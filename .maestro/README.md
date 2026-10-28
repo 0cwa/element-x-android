@@ -61,6 +61,8 @@ Also, if updating the application code, do not forget to deploy again the applic
 
 The [Maestro (local) workflow](../.github/workflows/maestro-local.yml) builds the debug APK and runs the suite on a GitHub-hosted Android emulator. It does not use Maestro Cloud or need a Maestro Cloud API key. A configuration job checks required settings before building the APK. Runs sharing the test account are queued to avoid interfering with each other.
 
+Configuration, APK compilation and test flows use the same immutable run commit, even if the PR changes while a job is queued. CI collects Maestro screenshots and redacted logs without a separate continuous video recorder, reducing emulator load. Welcome-screen checks can dismiss Android's specific "System UI isn't responding" dialog with a bounded retry; app crashes and app ANR dialogs still fail the test.
+
 ### Account settings
 
 In the repository's **Settings → Secrets and variables → Actions**, configure the username, password and recovery key as **Secrets**. Optional room, invitee and provider overrides can be **Variables** or **Secrets**; a same-named secret takes precedence.
