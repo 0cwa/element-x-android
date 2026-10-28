@@ -3,5 +3,8 @@ appId: ${MAESTRO_APP_ID}
 - takeScreenshot: build/maestro/520-Timeline
 - tapOn: "Add attachment"
 - tapOn: "Share location"
-- tapOn: "Share my location"
+# An emulator without a location fix shares the selected map position instead.
+- tapOn: "Share (my|selected) location"
+- assertVisible:
+    id: "text_editor"
 - takeScreenshot: build/maestro/521-Timeline

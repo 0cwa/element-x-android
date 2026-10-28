@@ -51,6 +51,7 @@ class MaestroScriptsTest(unittest.TestCase):
         self.assertEqual(assignments["MAESTRO_HOMESERVER"], "chat.example.org")
         self.assertEqual(assignments["MAESTRO_PASSWORD"], self.env["MAESTRO_PASSWORD"])
         self.assertEqual(assignments["MAESTRO_CLEANUP_SESSIONS"], "false")
+        self.assertEqual(assignments["MAESTRO_LOCATION_SHARING_ENABLED"], "true")
         self.assert_no_credentials_in_output(result)
 
     def test_explicit_provider_is_preserved(self):
@@ -82,6 +83,16 @@ class MaestroScriptsTest(unittest.TestCase):
         self.assertIn("MAESTRO_CLEANUP_SESSIONS", result.stderr)
         self.assertFalse(self.env_file.exists())
 
+    def test_location_sharing_rejects_invalid_boolean_before_export(self):
+        for value in ("", "yes", "TRUE", "false\nINJECTED=value"):
+            with self.subTest(value=value):
+                self.env["MAESTRO_LOCATION_SHARING_ENABLED"] = value
+                result = self.prepare()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("MAESTRO_LOCATION_SHARING_ENABLED", result.stderr)
+                self.assertFalse(self.env_file.exists())
+                self.assert_no_credentials_in_output(result)
+
     def run_mocked_runner(self, status):
         # Isolate only the fixed output directory; execute the runner's real shell
         # logic with mocked adb/Maestro commands, without touching a device or HOME.
@@ -95,6 +106,7 @@ class MaestroScriptsTest(unittest.TestCase):
             "MOCK_ADB_CALLS": str(self.root / "adb-calls"),
             "MOCK_INSTALLED_APK": str(self.root / "installed-apk"),
             "MOCK_MAESTRO_STATUS": str(status),
+            "MOCK_LOCATION_SHARING_ENABLED": str(self.root / "location-sharing-enabled"),
         })
         mock_commands = """
             adb() {
@@ -107,7 +119,10 @@ class MaestroScriptsTest(unittest.TestCase):
                 esac
                 return 0
             }
-            maestro() { return "$MOCK_MAESTRO_STATUS"; }
+            maestro() {
+                printenv MAESTRO_LOCATION_SHARING_ENABLED > "$MOCK_LOCATION_SHARING_ENABLED"
+                return "$MOCK_MAESTRO_STATUS"
+            }
             sleep() { :; }
             source "$1" "$2"
         """
@@ -127,6 +142,14 @@ class MaestroScriptsTest(unittest.TestCase):
     def test_runner_preserves_success_when_artifact_pull_fails(self):
         result, _ = self.run_mocked_runner(0)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_runner_exports_the_apk_location_capability_to_maestro(self):
+        for value in ("true", "false"):
+            with self.subTest(value=value):
+                self.env["MAESTRO_LOCATION_SHARING_ENABLED"] = value
+                result, _ = self.run_mocked_runner(0)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual((self.root / "location-sharing-enabled").read_text().strip(), value)
 
     def test_runner_rejects_missing_config_before_adb(self):
         self.env["MAESTRO_PASSWORD"] = ""
