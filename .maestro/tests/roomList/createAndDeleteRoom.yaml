@@ -27,7 +27,8 @@ appId: ${MAESTRO_APP_ID}
     commands:
       - tapOn:
           id: "confirm_invite_unknown"
-- tapOn: "aRoomName"
+- tapOn:
+    id: "messages-room_details"
 - tapOn: "Invite"
 # assert there's 1 member and 1 invitee
 - tapOn: "Search for someone"
@@ -53,8 +54,10 @@ appId: ${MAESTRO_APP_ID}
 - tapOn: "People"
 # assert there's 1 member and 2 invitees
 - tapOn: "Back"
-- scroll
-- scroll
+- scrollUntilVisible:
+    direction: DOWN
+    element:
+      text: "Leave room"
 - tapOn: "Leave room"
 - tapOn: "Leave"
 - runFlow:

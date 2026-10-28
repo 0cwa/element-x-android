@@ -20,7 +20,10 @@ appId: ${MAESTRO_APP_ID}
 - takeScreenshot: build/maestro/330-createAndDeleteDM
 - tapOn:
     id: "messages-room_details"
-- scroll
+- scrollUntilVisible:
+    direction: DOWN
+    element:
+      text: "Leave room"
 - tapOn: "Leave room"
 - tapOn: "Leave"
 - runFlow:
