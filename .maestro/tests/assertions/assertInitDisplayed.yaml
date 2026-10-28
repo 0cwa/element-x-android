@@ -1,5 +1,16 @@
 appId: ${MAESTRO_APP_ID}
 ---
-- extendedWaitUntil:
-    visible: "Be in your element"
-    timeout: 30000
+# A slow emulator can put Android's System UI ANR dialog over the welcome screen.
+# Recover only that system dialog; Element crashes and ANRs must still fail.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible: "System UI isn't responding"
+          commands:
+            - tapOn:
+                id: "android:id/aerr_wait"
+      - extendedWaitUntil:
+          visible: "Be in your element"
+          timeout: 30000
