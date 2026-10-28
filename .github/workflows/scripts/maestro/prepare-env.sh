@@ -39,11 +39,18 @@ prepare_maestro_environment() {
         printf 'MAESTRO_CLEANUP_SESSIONS must be true or false.\n' >&2
         return 1
     fi
+    # CI derives this from the APK build. Local runs retain full location coverage
+    # unless the caller explicitly selects an APK without a map provider.
+    MAESTRO_LOCATION_SHARING_ENABLED=${MAESTRO_LOCATION_SHARING_ENABLED-true}
+    if [[ "$MAESTRO_LOCATION_SHARING_ENABLED" != true && "$MAESTRO_LOCATION_SHARING_ENABLED" != false ]]; then
+        printf 'MAESTRO_LOCATION_SHARING_ENABLED must be true or false.\n' >&2
+        return 1
+    fi
 
     # Reject multiline settings before writing anything to GITHUB_ENV. This prevents
     # a pasted value from becoming another environment assignment, and inputText
     # expects these credentials and names to be entered on one line.
-    local settings=("${required[@]}" MAESTRO_HOMESERVER MAESTRO_CLEANUP_SESSIONS)
+    local settings=("${required[@]}" MAESTRO_HOMESERVER MAESTRO_CLEANUP_SESSIONS MAESTRO_LOCATION_SHARING_ENABLED)
     for name in "${settings[@]}"; do
         value=${!name}
         if [[ "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then

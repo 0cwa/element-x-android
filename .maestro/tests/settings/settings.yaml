@@ -46,14 +46,20 @@ appId: ${MAESTRO_APP_ID}
 - hideKeyboard
 - back
 
-- scrollUntilVisible:
-    direction: DOWN
-    element:
-      text: "Location sharing"
-- tapOn:
-    text: "Location sharing"
-- assertVisible: "Live location updates"
-- back
+# The APK deliberately omits location sharing when no map provider is configured.
+# Use the build capability, so a missing row still fails a map-enabled build.
+- runFlow:
+    when:
+      true: ${typeof MAESTRO_LOCATION_SHARING_ENABLED === "undefined" || MAESTRO_LOCATION_SHARING_ENABLED === "true"}
+    commands:
+      - scrollUntilVisible:
+          direction: DOWN
+          element:
+            text: "Location sharing"
+      - tapOn:
+          text: "Location sharing"
+      - assertVisible: "Live location updates"
+      - back
 
 ## General section
 - scrollUntilVisible:

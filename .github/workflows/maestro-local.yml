@@ -55,6 +55,9 @@ jobs:
     name: Build APK
     needs: [ maestro-configuration ]
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || vars.MAESTRO_ENVIRONMENT || 'maestro' }}
+    outputs:
+      location_sharing_enabled: ${{ steps.assemble.outputs.location_sharing_enabled }}
     # Secrets are not available to pull_request runs from forks, so the Maestro job below
     # cannot run for them; skip the build too, as its only consumer is that job.
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
@@ -92,7 +95,16 @@ jobs:
         with:
           cache-read-only: true # Only the debug build and unit tests jobs write the Gradle cache, see build.yml
       - name: Assemble debug APK
-        run: ./gradlew :app:assembleGplayDebug $CI_GRADLE_ARG_PROPERTIES
+        id: assemble
+        run: |
+          # Match buildTimeMapTilerConfig(): location sharing needs a nonempty API key.
+          # Export only the capability, never the provider key, to the test job.
+          if [[ -n "$ELEMENT_ANDROID_MAPTILER_API_KEY" ]]; then
+            echo "location_sharing_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "location_sharing_enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+          ./gradlew :app:assembleGplayDebug $CI_GRADLE_ARG_PROPERTIES
         env:
           ELEMENT_ANDROID_MAPTILER_API_KEY: ${{ secrets.MAPTILER_KEY }}
           ELEMENT_ANDROID_MAPTILER_LIGHT_MAP_ID: ${{ secrets.MAPTILER_LIGHT_MAP_ID }}
@@ -114,6 +126,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     environment: ${{ inputs.environment || vars.MAESTRO_ENVIRONMENT || 'maestro' }}
     timeout-minutes: 45
+    env:
+      MAESTRO_LOCATION_SHARING_ENABLED: ${{ needs.build-apk.outputs.location_sharing_enabled }}
     # Allow only one to run at a time, since they use the same environment.
     # Otherwise, tests running in parallel can break each other.
     # queue: max lets several runs wait their turn instead of the default, where a
@@ -129,6 +143,13 @@ jobs:
           ref: ${{ github.ref }}
           persist-credentials: false
       - *maestro_configuration
+      - name: Report location-sharing coverage
+        run: |
+          if [[ "$MAESTRO_LOCATION_SHARING_ENABLED" == true ]]; then
+            echo "Location-sharing tests are enabled: this APK has a MapTiler provider." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Location-sharing tests are omitted: this APK has no MapTiler provider because MAPTILER_KEY is unset." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Download APK artifact from previous job
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
