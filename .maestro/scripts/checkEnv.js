@@ -14,3 +14,8 @@ requireEnv("MAESTRO_RECOVERY_KEY", typeof MAESTRO_RECOVERY_KEY === "undefined" ?
 requireEnv("MAESTRO_ROOM_NAME", typeof MAESTRO_ROOM_NAME === "undefined" ? null : MAESTRO_ROOM_NAME)
 requireEnv("MAESTRO_INVITEE1_MXID", typeof MAESTRO_INVITEE1_MXID === "undefined" ? null : MAESTRO_INVITEE1_MXID)
 requireEnv("MAESTRO_INVITEE2_MXID", typeof MAESTRO_INVITEE2_MXID === "undefined" ? null : MAESTRO_INVITEE2_MXID)
+
+if (typeof MAESTRO_LOCATION_SHARING_ENABLED !== "undefined" &&
+    MAESTRO_LOCATION_SHARING_ENABLED !== "true" && MAESTRO_LOCATION_SHARING_ENABLED !== "false") {
+    throw "Fatal: MAESTRO_LOCATION_SHARING_ENABLED must be true or false"
+}
