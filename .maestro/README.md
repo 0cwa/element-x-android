@@ -37,6 +37,8 @@ maestro test .maestro/allTests.yaml
 
 The preparation script checks missing or empty settings and converts a full Matrix user ID into the username and account provider used by the MAS login form. A username without a provider defaults to matrix.org; set `MAESTRO_HOMESERVER` to use another MAS-backed provider. The suite currently tests password authentication, not SSO or CAPTCHA flows.
 
+Local runs expect location sharing to be included in the installed APK. If you built an APK without a MapTiler API key, set `MAESTRO_LOCATION_SHARING_ENABLED=false` before sourcing the preparation script. This omits the location-settings and location-message flows; all other tests still run. The flag accepts only `true` or `false` and defaults to `true` locally.
+
 ### Output
 
 Maestro prints the result on the console and writes diagnostic files under `~/.maestro/tests`. Explicit screenshots use `build/maestro` names. Raw local diagnostics can contain entered credentials; use the CI sanitization script before sharing text diagnostics. CI uploads only redacted text and the suite's explicit screenshots, excluding recordings and automatic failure screenshots.
@@ -79,6 +81,8 @@ Existing `MATRIX_MAESTRO_ACCOUNT_PASSWORD` and `MATRIX_MAESTRO_ACCOUNT_RECOVERY_
 
 If you added the settings under **Settings → Environments**, the jobs must select that exact environment. Set the repository variable `MAESTRO_ENVIRONMENT`, or choose the environment when manually running the workflow. Repository-level settings work without any environment-specific values. Existing environment protection rules still apply.
 
+The APK build selects the same Actions environment as the configuration and emulator jobs. Location sharing additionally needs the optional `MAPTILER_KEY` build secret; the account password and recovery key do not enable maps. CI derives `MAESTRO_LOCATION_SHARING_ENABLED` from the API key actually supplied to that build and reports the resulting coverage in its summary. Without a provider, the app intentionally hides location sharing, so CI omits only its two location flows. When a provider is configured, their assertions remain required. Do not set a separate CI location flag: it must match the built APK.
+
 The configured account must already have joined `MyRoom`, or the room named by an override. No room or invitee settings are needed when using the defaults above. The suite signs out its own session on success; broad session cleanup is optional on forks and uses the same resolved username, provider and password as the test.
 
 ### Run and troubleshoot
@@ -89,6 +93,7 @@ Open **Actions → Maestro (local) → Run workflow**, select the branch contain
 * **Invalid credentials:** the MAS provider rejected the configured username/password pair. Check that both settings belong to the same test account and provider. This happens before recovery-key verification.
 * **Device verification fails:** confirm recovery was already enabled and the configured recovery key belongs to the account that just signed in.
 * **Room or invitee is not found:** check the exact displayed room name, room membership and full Matrix IDs. The suite needs two other test accounts.
+* **Location sharing is omitted:** this APK was built without `MAPTILER_KEY`. Add that optional build secret in the repository or selected environment to exercise maps; the remaining suite does not require it.
 * **Inspecting a failed run:** download `test-results` for redacted text diagnostics and explicit screenshots. Raw recordings and automatic failure screenshots are excluded because text redaction cannot safely redact images.
 
 Re-run on the branch containing a workflow fix. Re-running an older workflow execution continues to use that execution's original code, even when account secrets have since been updated.
