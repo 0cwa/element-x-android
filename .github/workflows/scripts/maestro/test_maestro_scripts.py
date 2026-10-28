@@ -107,15 +107,13 @@ class MaestroScriptsTest(unittest.TestCase):
             "MOCK_INSTALLED_APK": str(self.root / "installed-apk"),
             "MOCK_MAESTRO_STATUS": str(status),
             "MOCK_LOCATION_SHARING_ENABLED": str(self.root / "location-sharing-enabled"),
+            "MOCK_LOGCAT_CLEANUP": str(self.root / "logcat-cleanup"),
         })
         mock_commands = """
             adb() {
                 printf '%s\\n' "$*" >> "$MOCK_ADB_CALLS"
                 case "$*" in
                     'install -r '*) printf '%s\\n' "$3" > "$MOCK_INSTALLED_APK" ;;
-                    'shell cat /data/local/tmp/screenrecord_pid.txt') printf '4242\\r\\n' ;;
-                    'shell pidof screenrecord') printf '1234 5678\\r\\n' ;;
-                    'pull '*) return 8 ;;
                 esac
                 return 0
             }
@@ -123,25 +121,27 @@ class MaestroScriptsTest(unittest.TestCase):
                 printenv MAESTRO_LOCATION_SHARING_ENABLED > "$MOCK_LOCATION_SHARING_ENABLED"
                 return "$MOCK_MAESTRO_STATUS"
             }
-            sleep() { :; }
+            kill() {
+                : > "$MOCK_LOGCAT_CLEANUP"
+                return 8
+            }
             source "$1" "$2"
         """
         result = subprocess.run(["bash", "-c", mock_commands, "mock-runner", str(runner), str(apk)],
                                 env=self.env, capture_output=True, text=True, check=False, timeout=10)
         return result, apk
 
-    def test_runner_preserves_failed_test_and_bounds_stuck_recording(self):
+    def test_runner_preserves_failed_test_when_logcat_cleanup_fails(self):
         result, apk = self.run_mocked_runner(7)
         self.assertEqual(result.returncode, 7, result.stderr)
         self.assertEqual((self.root / "installed-apk").read_text().strip(), str(apk))
-        calls = (self.root / "adb-calls").read_text().splitlines()
-        self.assertEqual(calls.count("shell pidof screenrecord"), 11)
-        self.assertIn("Screen recording did not stop in time", result.stderr)
+        self.assertTrue((self.root / "logcat-cleanup").exists())
         self.assert_no_credentials_in_output(result)
 
-    def test_runner_preserves_success_when_artifact_pull_fails(self):
+    def test_runner_preserves_success_when_logcat_cleanup_fails(self):
         result, _ = self.run_mocked_runner(0)
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.root / "logcat-cleanup").exists())
 
     def test_runner_exports_the_apk_location_capability_to_maestro(self):
         for value in ("true", "false"):

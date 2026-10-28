@@ -30,7 +30,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.ref }}
+          # Pin every job to this run's immutable commit, including queued jobs.
+          ref: ${{ github.sha }}
           persist-credentials: false
       - name: Test Maestro configuration and artifact helpers
         run: python3 -m unittest discover -s .github/workflows/scripts/maestro -v
@@ -81,9 +82,8 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Ensure we are building the branch and not the branch after being merged on develop
-          # https://github.com/actions/checkout/issues/881
-          ref: ${{ github.ref }}
+          # Build the same immutable commit used by configuration and tests.
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         name: Use JDK 21
@@ -138,9 +138,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Ensure we are building the branch and not the branch after being merged on develop
-          # https://github.com/actions/checkout/issues/881
-          ref: ${{ github.ref }}
+          # A queued test must use the flows from the commit that built its APK.
+          ref: ${{ github.sha }}
           persist-credentials: false
       - *maestro_configuration
       - name: Report location-sharing coverage
