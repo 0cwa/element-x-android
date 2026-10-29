@@ -1,0 +1,144 @@
+name: Widget upstream candidate validation
+
+on:
+  push:
+    branches: [prepare/widget-submission-2026-10-29]
+    paths:
+      - .github/workflows/widget-upstream-validation.yml
+      - tools/widget/export_upstream.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: widget-submission-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx7g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8" -Dkotlin.daemon.jvm.options=-Xmx2g -XX:+UseG1GC
+
+jobs:
+  export:
+    if: github.repository == '0cwa/element-x-android' && github.ref == 'refs/heads/prepare/widget-submission-2026-10-29'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    outputs:
+      matrix: ${{ steps.export.outputs.matrix }}
+      integration_sha: ${{ steps.export.outputs.integration_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export clean candidates and verify source parity
+        id: export
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/widget/export_upstream.py
+      - name: Upload exact revision manifest
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: widget-submission-manifest
+          path: ${{ runner.temp }}/widget-export/manifest.json
+          if-no-files-found: warn
+
+  candidate:
+    needs: export
+    name: Candidate ${{ matrix.unit }} - compile, focused tests and architecture
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.export.outputs.matrix) }}
+    steps:
+      - uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: true
+          android: false
+          large-packages: false
+          swap-storage: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ matrix.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-read-only: true
+      - name: Compile app and changed modules; run focused tests, Konsist and formatting
+        env:
+          GRADLE_TASKS: ${{ toJSON(matrix.tasks) }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          subprocess.run(['./gradlew', *json.loads(os.environ['GRADLE_TASKS']),
+                          '--stacktrace', '--no-daemon', '--no-configuration-cache', '--continue'], check=True)
+          PY
+      - name: Upload test and architecture reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: widget-candidate-${{ matrix.unit }}-reports
+          path: |
+            **/build/reports/tests/
+            **/build/reports/ktlint/
+          if-no-files-found: warn
+
+  integration:
+    needs: export
+    name: Prepared integration - units, screenshots and coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: true
+          android: false
+          large-packages: false
+          swap-storage: false
+      - name: Increase swap for screenshot tests
+        run: |
+          sudo swapoff -a
+          sudo fallocate -l 8G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.export.outputs.integration_sha }}
+          lfs: true
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-read-only: true
+      - name: Run full unit tests
+        run: ./gradlew :app:testGplayDebugUnitTest testDebugUnitTest --stacktrace --no-daemon --no-configuration-cache --continue
+      - name: Verify existing screenshot baselines
+        run: ./gradlew verifyPaparazziDebug --stacktrace --no-daemon --no-configuration-cache --continue
+      - name: Verify coverage
+        run: ./gradlew :koverXmlReportMerged :koverHtmlReportMerged :koverVerifyAll -x testDebugUnitTest --stacktrace --no-daemon --no-configuration-cache
+      - name: Upload validation reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: widget-prepared-integration-reports
+          path: |
+            **/build/reports/tests/
+            **/build/paparazzi/failures/
+            build/reports/kover/
+          if-no-files-found: warn
