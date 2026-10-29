@@ -51,5 +51,6 @@ internal fun aWidgetScreenState(
         isOpenIdPermissionRequired = isOpenIdPermissionRequired,
         widgetName = widgetName,
         eventSink = eventSink,
+        capabilityRequest = null,
     )
 }

@@ -10,6 +10,7 @@ package io.element.android.features.widget.impl.ui
 import io.element.android.libraries.widget.WidgetMessageInterceptor
 
 sealed interface WidgetScreenEvents {
+    data class RespondToCapabilities(val requestId: Long, val allowed: Boolean) : WidgetScreenEvents
     data object Close : WidgetScreenEvents
     data object GrantPreloadPermission : WidgetScreenEvents
     data object GrantOpenIdPermission : WidgetScreenEvents
