@@ -1,0 +1,139 @@
+name: Validate prepared Extensions previews
+
+on:
+  push:
+    branches: [prepare/widget-submission-2026-10-29]
+    paths: [.github/workflows/widget-preview-validation.yml]
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: bec087b83f0a0f2d403130b201f67ed2a40348c4
+  CANDIDATE_BRANCH: submit/widget-40963545887/k-extensions-navigation
+  GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx7g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8" -Dkotlin.daemon.jvm.options=-Xmx2g -XX:+UseG1GC
+
+jobs:
+  record:
+    if: github.repository == '0cwa/element-x-android' && github.ref == 'refs/heads/prepare/widget-submission-2026-10-29'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: true
+          android: false
+          large-packages: false
+          swap-storage: false
+      - name: Increase swap for screenshot tests
+        run: |
+          sudo swapoff -a
+          sudo fallocate -l 8G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          lfs: true
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-read-only: true
+      - name: Verify focused tests, architecture and formatting
+        run: ./gradlew :features:extensions:impl:testDebugUnitTest :features:roomdetails:impl:testDebugUnitTest :tests:konsist:testDebugUnitTest ktlintCheck --stacktrace --no-daemon --no-configuration-cache --continue
+      - name: Record previews on the CI image
+        run: ./gradlew recordPaparazziDebug --stacktrace --no-daemon --no-configuration-cache
+      - name: Verify all recorded previews
+        run: ./gradlew verifyPaparazziDebug --stacktrace --no-daemon --no-configuration-cache
+      - name: Isolate only the new loading and error baselines
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+          root = Path('tests/uitests/src/test/snapshots/images')
+          expected = {root / f'features.extensions.impl_ExtensionsView_{theme}_{index}_en.png'
+                      for theme in ('Day', 'Night') for index in (2, 3)}
+          changed = subprocess.check_output(['git', 'ls-files', '--modified', '--others', '--exclude-standard'], text=True).splitlines()
+          if set(map(Path, changed)) != expected:
+              raise SystemExit('Unexpected screenshot changes; refusing to accept unrelated baselines: ' + '\n'.join(changed))
+          output = Path(os.environ['RUNNER_TEMP']) / 'extension-previews'
+          output.mkdir()
+          for path in expected:
+              if not path.read_bytes().startswith(b'\x89PNG\r\n\x1a\n'):
+                  raise SystemExit('Not a PNG: ' + str(path))
+              shutil.copy2(path, output / path.name)
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: extensions-loading-error-previews
+          path: ${{ runner.temp }}/extension-previews/
+          if-no-files-found: error
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: extensions-preview-reports
+          path: |
+            **/build/reports/tests/
+            **/build/paparazzi/failures/
+          if-no-files-found: warn
+
+  publish:
+    needs: record
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: extensions-loading-error-previews
+          path: tests/uitests/src/test/snapshots/images/
+      - name: Commit only the verified baselines without rewriting history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+          import subprocess
+          def git(*args, env=None):
+              return subprocess.check_output(['git', *args], text=True, env=env).strip()
+          branch = os.environ['CANDIDATE_BRANCH']
+          expected_sha = os.environ['CANDIDATE_SHA']
+          remote_sha = git('ls-remote', 'origin', 'refs/heads/' + branch).split()[0]
+          if remote_sha != expected_sha:
+              raise SystemExit('Candidate moved; refusing to publish baselines for an older revision')
+          root = Path('tests/uitests/src/test/snapshots/images')
+          expected = {str(root / f'features.extensions.impl_ExtensionsView_{theme}_{index}_en.png')
+                      for theme in ('Day', 'Night') for index in (2, 3)}
+          for filename in expected:
+              if not Path(filename).read_bytes().startswith(b'\x89PNG\r\n\x1a\n'):
+                  raise SystemExit('Not a PNG: ' + filename)
+          git('lfs', 'install', '--local')
+          git('add', *sorted(expected))
+          if set(git('diff', '--cached', '--name-only').splitlines()) != expected:
+              raise SystemExit('Unexpected staged files')
+          git('config', 'user.name', 'github-actions[bot]')
+          git('config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
+          git('commit', '-m', 'Record Extensions loading and error previews\n\nCapture both themes on the CI image after focused tests, architecture checks and Paparazzi verification.')
+          env = dict(os.environ)
+          env['GIT_CONFIG_COUNT'] = '1'
+          env['GIT_CONFIG_KEY_0'] = 'http.https://github.com/.extraheader'
+          env['GIT_CONFIG_VALUE_0'] = 'AUTHORIZATION: basic ' + base64.b64encode(('x-access-token:' + os.environ['GH_TOKEN']).encode()).decode()
+          git('push', 'origin', 'HEAD:refs/heads/' + branch, env=env)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('Verified preview baselines published to `' + branch + '` at `' + git('rev-parse', 'HEAD') + '`.\n')
+          PY
