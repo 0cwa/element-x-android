@@ -26,6 +26,8 @@ open class ExtensionsStatePreviewParam : PreviewParameterProvider<ExtensionsStat
                     anExtensionItem(widgetId = "poll-bot", name = "Poll Bot", url = "https://example.com/poll"),
                 ),
             ),
+            anExtensionsState(isLoading = true),
+            anExtensionsState(hasLoadError = true),
         )
 }
 
