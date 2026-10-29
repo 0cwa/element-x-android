@@ -1,0 +1,81 @@
+name: Apply fork Maestro account budget
+
+on:
+  push:
+    branches: [prepare/widget-submission-2026-10-29]
+    paths: [.github/workflows/widget-maestro-budget.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    if: github.repository == '0cwa/element-x-android' && github.ref == 'refs/heads/prepare/widget-submission-2026-10-29'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify the routing policy and publish the identical workflow to historical branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+          import subprocess
+          def git(*args, env=None):
+              return subprocess.check_output(['git', *args], text=True, env=env).strip()
+          def should_run(event, repo, same_repo, branch):
+              return event == 'workflow_dispatch' or (same_repo and (repo != '0cwa/element-x-android' or branch == 'widget-support'))
+          assert should_run('workflow_dispatch', '0cwa/element-x-android', True, 'any-branch')
+          assert should_run('pull_request', '0cwa/element-x-android', True, 'widget-support')
+          assert not should_run('pull_request', '0cwa/element-x-android', True, 'widget-support-02-capability-policy')
+          assert should_run('pull_request', 'element-hq/element-x-android', True, 'any-branch')
+          assert not should_run('pull_request', 'element-hq/element-x-android', False, 'any-branch')
+          path = '.github/workflows/maestro-local.yml'
+          content = Path(path).read_bytes()
+          expected_blob = '064c8bd0bbfff6f3acc0f51f9b5b9a17e5a23944'
+          desired_blob = git('hash-object', path)
+          branches = ['develop', 'widget-support', 'widget-support-02-capability-policy',
+                      'widget-support-03-shared-widget-transport', 'widget-support-04-generic-widget-host',
+                      'widget-support-05-room-state-fallback', 'widget-support-06-extensions-discovery',
+                      'widget-support-07-capability-consent', 'widget-support-08-media-permission-lifecycle']
+          git('config', 'user.name', 'github-actions[bot]')
+          git('config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
+          refs = []
+          results = []
+          for branch in branches:
+              base = git('rev-parse', 'origin/' + branch)
+              old_blob = git('rev-parse', base + ':' + path)
+              if old_blob == desired_blob:
+                  results.append((branch, base, 'already applied'))
+                  continue
+              if old_blob != expected_blob:
+                  raise RuntimeError('Unexpected Maestro workflow on ' + branch + '; refusing to overwrite')
+              git('checkout', '--detach', base)
+              Path(path).write_bytes(content)
+              git('add', path)
+              git('diff', '--cached', '--check')
+              assert git('diff', '--cached', '--name-only') == path
+              git('commit', '-m', 'Budget shared-account Maestro runs on the fork\n\nA stacked run exhausted the homeserver room-creation quota (HTTP 429, retry after 2228 seconds). Keep fast configuration checks on every PR, automatic emulator coverage on integration, and explicit manual runs on any branch. Keep all test assertions and upstream routing unchanged.')
+              head = git('rev-parse', 'HEAD')
+              refs.append(head + ':refs/heads/' + branch)
+              results.append((branch, head, 'updated'))
+          if refs:
+              env = dict(os.environ)
+              env['GIT_CONFIG_COUNT'] = '1'
+              env['GIT_CONFIG_KEY_0'] = 'http.https://github.com/.extraheader'
+              env['GIT_CONFIG_VALUE_0'] = 'AUTHORIZATION: basic ' + base64.b64encode(('x-access-token:' + os.environ['GH_TOKEN']).encode()).decode()
+              git('push', '--atomic', 'origin', *refs, env=env)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('## Fork Maestro account budget\n\nOnly the Maestro workflow changed. No test assertions or feature code changed. No refs were force-pushed.\n\n')
+              for branch, head, status in results:
+                  summary.write(f'- `{branch}`: `{head}` ({status})\n')
+          PY
