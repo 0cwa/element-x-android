@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import tempfile
 
 UPSTREAM = "078b6176efcb55c44a60919543104a75a145db93"
 REPOSITORY = "0cwa/element-x-android"
@@ -32,6 +31,27 @@ def git(*args, env=None):
     if result.returncode:
         raise RuntimeError(f"git {args[0]} failed:\n{result.stdout}")
     return result.stdout.strip()
+
+
+def resolve_room_state_dependencies():
+    """Resolve only the inspected duplicate-serialization conflict, never arbitrary conflicts."""
+    path = "libraries/matrix/impl/build.gradle.kts"
+    unmerged = git("diff", "--name-only", "--diff-filter=U").splitlines()
+    if unmerged != [path]:
+        raise RuntimeError(f"Unreviewed merge conflict: {unmerged}")
+    content = git("show", f"{UPSTREAM}:{path}") + "\n"
+    for anchor, addition in [
+        ("    implementation(libs.serialization.json)\n",
+         "    implementation(platform(libs.network.okhttp.bom))\n    implementation(libs.network.okhttp)\n"),
+        ("    testImplementation(projects.libraries.previewutils)\n",
+         "    testImplementation(libs.network.mockwebserver)\n"),
+    ]:
+        if content.count(anchor) != 1:
+            raise RuntimeError(f"The reviewed Gradle anchor changed: {anchor}")
+        content = content.replace(anchor, anchor + addition)
+    Path(path).write_text(content)
+    git("add", path)
+    print("Resolved the reviewed Matrix Gradle overlap; retained upstream plus room-state dependencies.", flush=True)
 
 
 def is_test_or_generated(path):
@@ -81,7 +101,13 @@ def main():
                 f"Join prerequisites for widget unit {unit}\n\nCombine only the audited dependency branches; no implementation changes.",
                 heads[dependency])
         base = git("rev-parse", "HEAD")
-        git("cherry-pick", "-x", source)
+        try:
+            git("cherry-pick", "-x", source)
+        except RuntimeError:
+            if unit != "C":
+                raise
+            resolve_room_state_dependencies()
+            git("cherry-pick", "--continue")
         head = git("rev-parse", "HEAD")
         git("merge-base", "--is-ancestor", UPSTREAM, head)
         git("diff", "--check", base, head)
@@ -105,8 +131,12 @@ def main():
         print(json.dumps({key: value for key, value in entry.items() if key not in {"files", "tasks"}}), flush=True)
     # Independently merge upstream into the original final candidate, then compare full trees.
     git("checkout", "--detach", UNITS[-1][2])
-    git("merge", "--no-ff", "--no-edit", "-m",
-        "Validate widget export source parity\n\nCompare the exported DAG with an independent upstream merge.", UPSTREAM)
+    try:
+        git("merge", "--no-ff", "--no-edit", "-m",
+            "Validate widget export source parity\n\nCompare the exported DAG with an independent upstream merge.", UPSTREAM)
+    except RuntimeError:
+        resolve_room_state_dependencies()
+        git("commit", "--no-edit")
     git("diff", "--exit-code", "HEAD^{tree}", heads["K"] + "^{tree}")
     report = {"upstream": UPSTREAM, "source_parity": True, "candidates": manifest}
     (report_dir / "manifest.json").write_text(json.dumps(report, indent=2) + "\n")
