@@ -51,6 +51,11 @@ jobs:
           MAESTRO_APP_ID: io.element.android.x.debug
           MAESTRO_CLEANUP_SESSIONS: ${{ vars.MAESTRO_CLEANUP_SESSIONS || (github.repository == 'element-hq/element-x-android' && 'true') || 'false' }}
         run: bash .github/workflows/scripts/maestro/prepare-env.sh
+      - name: Explain fork test-account budget
+        if: github.repository == '0cwa/element-x-android' && github.event_name == 'pull_request' && github.head_ref != 'widget-support'
+        run: |
+          echo '### Emulator suite not run automatically on this prerequisite PR' >> "$GITHUB_STEP_SUMMARY"
+          echo 'The shared account hit a homeserver room-creation HTTP 429 when all eight PRs ran the destructive suite. Automatic fork emulator coverage runs on widget-support; this branch remains available through workflow_dispatch. Configuration checks are not an end-to-end pass.' >> "$GITHUB_STEP_SUMMARY"
 
   build-apk:
     name: Build APK
@@ -59,9 +64,13 @@ jobs:
     environment: ${{ inputs.environment || vars.MAESTRO_ENVIRONMENT || 'maestro' }}
     outputs:
       location_sharing_enabled: ${{ steps.assemble.outputs.location_sharing_enabled }}
-    # Secrets are not available to pull_request runs from forks, so the Maestro job below
-    # cannot run for them; skip the build too, as its only consumer is that job.
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    # The fork has one shared public-homeserver account. Even serialized runs across
+    # the full stack exceed its room-creation quota. Keep automatic coverage on the
+    # integration PR; individual branches remain explicitly runnable. Upstream is unchanged.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.repository != '0cwa/element-x-android' || github.head_ref == 'widget-support'))
     concurrency:
       group: ${{ format('maestro-build-{0}', github.ref) }}
       cancel-in-progress: true
