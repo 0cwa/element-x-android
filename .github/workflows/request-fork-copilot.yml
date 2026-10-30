@@ -14,36 +14,53 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Request Copilot bot review on one draft PR
+      - name: Request Copilot code review on historical and A-K fork PRs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
           import json
           import os
+          import urllib.error
           import urllib.request
 
-          def gql(query, variables):
-              payload = json.dumps({"query": query, "variables": variables}).encode()
-              request = urllib.request.Request(
-                  "https://api.github.com/graphql",
-                  data=payload,
-                  headers={
-                      "Authorization": "Bearer " + os.environ["GH_TOKEN"],
-                      "Accept": "application/vnd.github+json",
-                      "Content-Type": "application/json",
-                      "X-GitHub-Api-Version": "2026-03-10",
-                  },
+          prs = [1, 4, 5, 6, 7, 8, 11, 12, *range(13, 24)]
+          url = "https://api.github.com/graphql"
+          headers = {
+              "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+              "Accept": "application/vnd.github+json",
+              "Content-Type": "application/json",
+              "X-GitHub-Api-Version": "2026-03-10",
+          }
+
+          def graphql(query, variables):
+              req = urllib.request.Request(
+                  url, data=json.dumps({"query": query, "variables": variables}).encode(), headers=headers
               )
-              with urllib.request.urlopen(request, timeout=25) as response:
-                  result = json.load(response)
+              try:
+                  with urllib.request.urlopen(req, timeout=25) as response:
+                      result = json.load(response)
+              except urllib.error.HTTPError as e:
+                  raise RuntimeError("GitHub GraphQL HTTP " + str(e.code)) from e
               if result.get("errors"):
                   raise RuntimeError(json.dumps(result["errors"]))
               return result["data"]
 
           lookup = 'query($n:Int!){repository(owner:"0cwa",name:"element-x-android"){pullRequest(number:$n){id}}}'
-          pull_id = gql(lookup, {"n": 13})["repository"]["pullRequest"]["id"]
           mutation = 'mutation($p:ID!){requestReviewsByLogin(input:{pullRequestId:$p,botLogins:["copilot-pull-request-reviewer"]}){pullRequest{number}}}'
-          result = gql(mutation, {"p": pull_id})
-          print("Copilot bot-review request for fork PR:", result["requestReviewsByLogin"]["pullRequest"]["number"])
+          failures = []
+          for number in prs:
+              try:
+                  pr = graphql(lookup, {"n": number})["repository"]["pullRequest"]
+                  if pr is None:
+                      raise RuntimeError("PR not found")
+                  result = graphql(mutation, {"p": pr["id"]})
+                  actual = result["requestReviewsByLogin"]["pullRequest"]["number"]
+                  assert actual == number
+                  print(f"Copilot review requested: fork PR #{number}")
+              except Exception as exc:
+                  print(f"Could not request fork PR #{number}: {exc}")
+                  failures.append(number)
+          if failures:
+              raise SystemExit("GraphQL review requests failed for " + ", ".join(map(str, failures)))
           PY
