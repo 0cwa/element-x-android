@@ -1,0 +1,49 @@
+name: Request fork Copilot code review
+on:
+  push:
+    branches:
+      - review/request-copilot-2026-10-30
+    paths:
+      - .github/workflows/request-fork-copilot.yml
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  request:
+    if: github.repository == '0cwa/element-x-android'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Request Copilot bot review on one draft PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          def gql(query, variables):
+              payload = json.dumps({"query": query, "variables": variables}).encode()
+              request = urllib.request.Request(
+                  "https://api.github.com/graphql",
+                  data=payload,
+                  headers={
+                      "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                      "Accept": "application/vnd.github+json",
+                      "Content-Type": "application/json",
+                      "X-GitHub-Api-Version": "2026-03-10",
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=25) as response:
+                  result = json.load(response)
+              if result.get("errors"):
+                  raise RuntimeError(json.dumps(result["errors"]))
+              return result["data"]
+
+          lookup = 'query($n:Int!){repository(owner:"0cwa",name:"element-x-android"){pullRequest(number:$n){id}}}'
+          pull_id = gql(lookup, {"n": 13})["repository"]["pullRequest"]["id"]
+          mutation = 'mutation($p:ID!){requestReviewsByLogin(input:{pullRequestId:$p,botLogins:["copilot-pull-request-reviewer"]}){pullRequest{number}}}'
+          result = gql(mutation, {"p": pull_id})
+          print("Copilot bot-review request for fork PR:", result["requestReviewsByLogin"]["pullRequest"]["number"])
+          PY
